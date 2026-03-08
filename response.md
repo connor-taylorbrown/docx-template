@@ -1,0 +1,7 @@
+1. Forbidding these cases is a good call, the template author is assumed to be a technical user.
+2. Is run normalisation necessary? We parse each XML document, so we can surely do an in-order traversal of each paragraph node to guarantee correctness, **without affecting text outside tags**. *Flagging another assumption:* paragraphs cannot be nested, otherwise we're processing nested paragraphs multiple times.
+   1. So my tentative call is to do tag extraction here. We extract the text, and find the text offset, length, keyword and parameters of each tag.
+   2. We can trivially detect whether a tag occupies the whole text. Strip whitespace and match `{{#?...}}`&mdash;if it does, then we can flag this tag for multi-line support. Be lazy, and use groups to extract the head word (including `#` if present) and the parameter list.
+   3. If the text isn't a match, list all occurrences. 
+   4. Crucially, we now have enough information to decide the role of this paragraph in the template. If it's "all tag", log it with the multi-line parser. If contains one or more tags, log it with the inline parser. Otherwise, skip it for now.
+3. For element tree construction, we can kick off the inline parser right away, and kick off the multi-line parser after scanning the whole XML document.
