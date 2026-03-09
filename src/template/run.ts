@@ -1,8 +1,10 @@
+import { DocumentNode } from "./document-node.js";
+
 /**
  * Abstract Run class. Encapsulates split/merge operations over a single
  * text-bearing node, independent of tree type (XML vs. DOM).
  */
-export abstract class Run {
+export abstract class Run extends DocumentNode {
   /** Character length of this run's text content. */
   abstract get length(): number;
 

@@ -5,7 +5,7 @@ The following design supports logical template construction in a single pass ove
 All parsing is initiated from the recursive `classify` method on the `TreeReader` class. This accepts a parser instance as a constructor parameter, alongside an inline parser factory.
 
 **Paragraph classification:** in-order document tree traversal to the paragraph level. For each paragraph:
-   1. Handle isolated tag: if paragraph text lazy matches single tag, push node reference and result (tag) to parser.
+   1. Handle isolated tag: if trimmed paragraph text is exactly one tag, push node reference and result (tag) to parser. Whitespace-only content surrounding the tag is not visible after rendering, so the entire paragraph is owned by the tag.
    2. Handle other paragraph: perform inline parse, then push node reference and result (elements) to parser. **NOTE:** Result may be empty. Inline parse may modify paragraph tree (see "Run Normalisation" below).
 
 ## Parsing
