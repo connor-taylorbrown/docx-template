@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Parser, Element, SimpleElement, BlockElement } from "../src/template/parser.js";
+import { Parser, Element } from "../src/template/parser.js";
 import { ParagraphView, parseInline } from "../src/template/inline.js";
 import { Run } from "../src/template/run.js";
 import { TreeReader, TreeNode } from "../src/template/tree-reader.js";
@@ -90,14 +90,13 @@ function reader(): TreeReader {
   return new TreeReader(new Parser(), parseInline);
 }
 
-function asSimple(el: Element): SimpleElement {
-  expect(el.kind).toBe("simple");
-  return el as SimpleElement;
+function expectSimple(el: Element): void {
+  expect(el.nodes).toHaveLength(1);
+  expect(el.children).toHaveLength(0);
 }
 
-function asBlock(el: Element): BlockElement {
-  expect(el.kind).toBe("block");
-  return el as BlockElement;
+function expectBlock(el: Element): void {
+  expect(el.nodes).toHaveLength(2);
 }
 
 describe("TreeReader", () => {
@@ -130,9 +129,9 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      const el = asSimple(result[0]);
-      expect(el.node).toBe(p);
-      expect(el.tag.head).toBe("name");
+      expectSimple(result[0]);
+      expect(result[0].nodes[0]).toBe(p);
+      expect(result[0].tag.head).toBe("name");
     });
 
     it("whitespace-padded tag is still isolated", () => {
@@ -142,7 +141,7 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      asSimple(result[0]);
+      expectSimple(result[0]);
     });
 
     it("keyword tag is isolated", () => {
@@ -152,8 +151,8 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      const block = asBlock(result[0]);
-      expect(block.openTag.head).toBe("#if");
+      expectBlock(result[0]);
+      expect(result[0].tag.head).toBe("#if");
     });
 
     it("tag with surrounding text is not isolated — inline elements splice to scope", () => {
@@ -163,7 +162,7 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      asSimple(result[0]);
+      expectSimple(result[0]);
     });
   });
 
@@ -177,26 +176,24 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      const block = asBlock(result[0]);
-      expect(block.openNode).toBe(open);
-      expect(block.closeNode).toBe(close);
-      expect(block.openTag.head).toBe("#if");
-      expect(block.children).toEqual([]);
+      expectBlock(result[0]);
+      expect(result[0].nodes[0]).toBe(open);
+      expect(result[0].nodes[1]).toBe(close);
+      expect(result[0].tag.head).toBe("#if");
+      expect(result[0].children).toEqual([]);
     });
 
     it("empty block", () => {
-      const open = para("{{#each items}}");
-      const close = para("{{#end}}");
-      const root = container(open, close);
+      const root = container(para("{{#each items}}"), para("{{#end}}"));
       const r = reader();
       r.classify(root);
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      const block = asBlock(result[0]);
-      expect(block.openTag.head).toBe("#each");
-      expect(block.openTag.params).toBe("items");
-      expect(block.children).toEqual([]);
+      expectBlock(result[0]);
+      expect(result[0].tag.head).toBe("#each");
+      expect(result[0].tag.params).toBe("items");
+      expect(result[0].children).toEqual([]);
     });
 
     it("nested blocks", () => {
@@ -212,11 +209,13 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      const outer = asBlock(result[0]);
-      expect(outer.openTag.head).toBe("#if");
+      const outer = result[0];
+      expectBlock(outer);
+      expect(outer.tag.head).toBe("#if");
       expect(outer.children).toHaveLength(1);
-      const inner = asBlock(outer.children[0]);
-      expect(inner.openTag.head).toBe("#each");
+      const inner = outer.children[0];
+      expectBlock(inner);
+      expect(inner.tag.head).toBe("#each");
       expect(inner.children).toEqual([]);
     });
   });
@@ -231,10 +230,10 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      const block = asBlock(result[0]);
-      expect(block.children).toHaveLength(1);
-      const inner = asSimple(block.children[0]);
-      expect(inner.tag.head).toBe("name");
+      expectBlock(result[0]);
+      expect(result[0].children).toHaveLength(1);
+      expectSimple(result[0].children[0]);
+      expect(result[0].children[0].tag.head).toBe("name");
     });
 
     it("inline tags split across runs", () => {
@@ -244,25 +243,24 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      asSimple(result[0]);
+      expectSimple(result[0]);
     });
   });
 
   describe("recursive traversal", () => {
     it("nested containers", () => {
-      const p2 = para("Hello");
       const root = container(
         container(
           container(para("{{name}}")),
         ),
-        container(p2),
+        container(para("Hello")),
       );
       const r = reader();
       r.classify(root);
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      asSimple(result[0]);
+      expectSimple(result[0]);
     });
   });
 

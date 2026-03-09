@@ -1,12 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Tag } from "../src/template/tag.js";
 import { DocumentNode } from "../src/template/document-node.js";
-import {
-  Parser,
-  Element,
-  SimpleElement,
-  BlockElement,
-} from "../src/template/parser.js";
+import { Parser, Element } from "../src/template/parser.js";
 
 class TestNode extends DocumentNode {}
 
@@ -31,15 +26,15 @@ function end(): Tag {
   return { offset: 0, length: 0, head: "#end", params: null, isKeyword: true };
 }
 
-/** Type guard helpers for concise assertions. */
-function asSimple(el: Element): SimpleElement {
-  expect(el.kind).toBe("simple");
-  return el as SimpleElement;
+/** Assert element has one node (simple). */
+function expectSimple(el: Element): void {
+  expect(el.nodes).toHaveLength(1);
+  expect(el.children).toHaveLength(0);
 }
 
-function asBlock(el: Element): BlockElement {
-  expect(el.kind).toBe("block");
-  return el as BlockElement;
+/** Assert element has two nodes (block). */
+function expectBlock(el: Element): void {
+  expect(el.nodes).toHaveLength(2);
 }
 
 describe("parser", () => {
@@ -57,9 +52,9 @@ describe("parser", () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
-      const el = asSimple(result[0]);
-      expect(el.node).toBe(node);
-      expect(el.tag).toBe(tag);
+      expectSimple(result[0]);
+      expect(result[0].nodes[0]).toBe(node);
+      expect(result[0].tag).toBe(tag);
     });
 
     it("multiple entries at root", () => {
@@ -69,20 +64,20 @@ describe("parser", () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(2);
-      expect(result[0].kind).toBe("simple");
-      expect(result[1].kind).toBe("simple");
+      expectSimple(result[0]);
+      expectSimple(result[1]);
     });
 
     it("addCollection splices elements into current scope", () => {
-      const e1: SimpleElement = {
-        kind: "simple",
+      const e1: Element = {
         tag: simple("a"),
-        node: new TestNode(),
+        nodes: [new TestNode()],
+        children: [],
       };
-      const e2: SimpleElement = {
-        kind: "simple",
+      const e2: Element = {
         tag: simple("b"),
-        node: new TestNode(),
+        nodes: [new TestNode()],
+        children: [],
       };
       const parser = new Parser();
       parser.addCollection([e1, e2]);
@@ -97,20 +92,19 @@ describe("parser", () => {
   describe("block elements", () => {
     it("empty block", () => {
       const open = keyword("if");
-      const close = end();
       const openNode = new TestNode();
       const closeNode = new TestNode();
       const parser = new Parser();
       parser.addTag(openNode, open);
-      parser.addTag(closeNode, close);
+      parser.addTag(closeNode, end());
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
-      const el = asBlock(result[0]);
-      expect(el.openTag).toBe(open);
-      expect(el.openNode).toBe(openNode);
-      expect(el.closeNode).toBe(closeNode);
-      expect(el.children).toEqual([]);
+      expectBlock(result[0]);
+      expect(result[0].tag).toBe(open);
+      expect(result[0].nodes[0]).toBe(openNode);
+      expect(result[0].nodes[1]).toBe(closeNode);
+      expect(result[0].children).toEqual([]);
     });
 
     it("block with simple element", () => {
@@ -123,23 +117,24 @@ describe("parser", () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
-      const block = asBlock(result[0]);
-      expect(block.children).toHaveLength(1);
-      const child = asSimple(block.children[0]);
+      expectBlock(result[0]);
+      expect(result[0].children).toHaveLength(1);
+      const child = result[0].children[0];
+      expectSimple(child);
       expect(child.tag).toBe(inner);
-      expect(child.node).toBe(innerNode);
+      expect(child.nodes[0]).toBe(innerNode);
     });
 
     it("block with spliced elements", () => {
-      const e1: SimpleElement = {
-        kind: "simple",
+      const e1: Element = {
         tag: simple("a"),
-        node: new TestNode(),
+        nodes: [new TestNode()],
+        children: [],
       };
-      const e2: SimpleElement = {
-        kind: "simple",
+      const e2: Element = {
         tag: simple("b"),
-        node: new TestNode(),
+        nodes: [new TestNode()],
+        children: [],
       };
       const parser = new Parser();
       parser.addTag(new TestNode(), keyword("if"));
@@ -148,10 +143,10 @@ describe("parser", () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
-      const block = asBlock(result[0]);
-      expect(block.children).toHaveLength(2);
-      expect(block.children[0]).toBe(e1);
-      expect(block.children[1]).toBe(e2);
+      expectBlock(result[0]);
+      expect(result[0].children).toHaveLength(2);
+      expect(result[0].children[0]).toBe(e1);
+      expect(result[0].children[1]).toBe(e2);
     });
   });
 
@@ -167,24 +162,26 @@ describe("parser", () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
-      const outer = asBlock(result[0]);
-      expect(outer.openNode).toBe(outerOpen);
+      const outer = result[0];
+      expectBlock(outer);
+      expect(outer.nodes[0]).toBe(outerOpen);
       expect(outer.children).toHaveLength(1);
-      const inner = asBlock(outer.children[0]);
-      expect(inner.openNode).toBe(innerOpen);
+      const inner = outer.children[0];
+      expectBlock(inner);
+      expect(inner.nodes[0]).toBe(innerOpen);
       expect(inner.children).toEqual([]);
     });
 
     it("elements around nested block", () => {
-      const before: SimpleElement = {
-        kind: "simple",
+      const before: Element = {
         tag: simple("x"),
-        node: new TestNode(),
+        nodes: [new TestNode()],
+        children: [],
       };
-      const after: SimpleElement = {
-        kind: "simple",
+      const after: Element = {
         tag: simple("y"),
-        node: new TestNode(),
+        nodes: [new TestNode()],
+        children: [],
       };
       const innerOpen = new TestNode();
       const parser = new Parser();
@@ -197,10 +194,11 @@ describe("parser", () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
-      const outer = asBlock(result[0]);
+      const outer = result[0];
+      expectBlock(outer);
       expect(outer.children).toHaveLength(3);
       expect(outer.children[0]).toBe(before);
-      expect(asBlock(outer.children[1]).openNode).toBe(innerOpen);
+      expect(outer.children[1].nodes[0]).toBe(innerOpen);
       expect(outer.children[2]).toBe(after);
     });
   });
@@ -228,10 +226,10 @@ describe("parser", () => {
 
   describe("mixed sequences", () => {
     it("elements before and after block", () => {
-      const el: SimpleElement = {
-        kind: "simple",
+      const el: Element = {
         tag: simple("z"),
-        node: new TestNode(),
+        nodes: [new TestNode()],
+        children: [],
       };
       const openNode = new TestNode();
       const afterNode = new TestNode();
@@ -244,8 +242,8 @@ describe("parser", () => {
 
       expect(result).toHaveLength(3);
       expect(result[0]).toBe(el);
-      expect(asBlock(result[1]).openNode).toBe(openNode);
-      expect(asSimple(result[2]).node).toBe(afterNode);
+      expect(result[1].nodes[0]).toBe(openNode);
+      expect(result[2].nodes[0]).toBe(afterNode);
     });
 
     it("sibling blocks", () => {
@@ -257,10 +255,10 @@ describe("parser", () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(2);
-      const a = asBlock(result[0]);
-      const b = asBlock(result[1]);
-      expect(a.openTag.head).toBe("#if");
-      expect(b.openTag.head).toBe("#each");
+      expectBlock(result[0]);
+      expectBlock(result[1]);
+      expect(result[0].tag.head).toBe("#if");
+      expect(result[1].tag.head).toBe("#each");
     });
 
     it("block with mixed children", () => {
@@ -276,12 +274,14 @@ describe("parser", () => {
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
-      const outer = asBlock(result[0]);
+      const outer = result[0];
+      expectBlock(outer);
       expect(outer.children).toHaveLength(2);
-      expect(asSimple(outer.children[0]).node).toBe(elemNode);
-      const inner = asBlock(outer.children[1]);
+      expect(outer.children[0].nodes[0]).toBe(elemNode);
+      const inner = outer.children[1];
+      expectBlock(inner);
       expect(inner.children).toHaveLength(1);
-      expect(asSimple(inner.children[0]).node).toBe(innerElemNode);
+      expect(inner.children[0].nodes[0]).toBe(innerElemNode);
     });
   });
 });

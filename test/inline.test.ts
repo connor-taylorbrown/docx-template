@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Run } from "../src/template/run.js";
-import {
-  Element,
-  SimpleElement,
-  BlockElement,
-} from "../src/template/parser.js";
+import { Element } from "../src/template/parser.js";
 import { ParagraphView, parseInline } from "../src/template/inline.js";
 import { TestRun } from "./test-run.js";
 
@@ -35,14 +31,13 @@ class TestParagraph extends ParagraphView {
   }
 }
 
-function asSimple(el: Element): SimpleElement {
-  expect(el.kind).toBe("simple");
-  return el as SimpleElement;
+function expectSimple(el: Element): void {
+  expect(el.nodes).toHaveLength(1);
+  expect(el.children).toHaveLength(0);
 }
 
-function asBlock(el: Element): BlockElement {
-  expect(el.kind).toBe("block");
-  return el as BlockElement;
+function expectBlock(el: Element): void {
+  expect(el.nodes).toHaveLength(2);
 }
 
 describe("parseInline", () => {
@@ -61,7 +56,7 @@ describe("parseInline", () => {
       const result = parseInline(para);
 
       expect(result).toHaveLength(1);
-      asSimple(result[0]);
+      expectSimple(result[0]);
       expect(para.childTexts()).toEqual(["{{name}}"]);
     });
 
@@ -70,7 +65,7 @@ describe("parseInline", () => {
       const result = parseInline(para);
 
       expect(result).toHaveLength(1);
-      asSimple(result[0]);
+      expectSimple(result[0]);
       expect(para.childTexts()).toEqual(["Hello ", "{{name}}", " world"]);
     });
   });
@@ -83,9 +78,9 @@ describe("parseInline", () => {
       const result = parseInline(para);
 
       expect(result).toHaveLength(1);
-      const block = asBlock(result[0]);
-      expect(block.openTag.head).toBe("#if");
-      expect(block.children).toEqual([]);
+      expectBlock(result[0]);
+      expect(result[0].tag.head).toBe("#if");
+      expect(result[0].children).toEqual([]);
     });
 
     it("empty inline block", () => {
@@ -93,8 +88,8 @@ describe("parseInline", () => {
       const result = parseInline(para);
 
       expect(result).toHaveLength(1);
-      const block = asBlock(result[0]);
-      expect(block.children).toEqual([]);
+      expectBlock(result[0]);
+      expect(result[0].children).toEqual([]);
     });
 
     it("nested inline blocks", () => {
@@ -104,13 +99,15 @@ describe("parseInline", () => {
       const result = parseInline(para);
 
       expect(result).toHaveLength(1);
-      const outer = asBlock(result[0]);
-      expect(outer.openTag.head).toBe("#if");
+      const outer = result[0];
+      expectBlock(outer);
+      expect(outer.tag.head).toBe("#if");
       expect(outer.children).toHaveLength(1);
-      const inner = asBlock(outer.children[0]);
-      expect(inner.openTag.head).toBe("#each");
+      const inner = outer.children[0];
+      expectBlock(inner);
+      expect(inner.tag.head).toBe("#each");
       expect(inner.children).toHaveLength(1);
-      asSimple(inner.children[0]);
+      expectSimple(inner.children[0]);
     });
   });
 
@@ -123,7 +120,7 @@ describe("parseInline", () => {
       const result = parseInline(para);
 
       expect(result).toHaveLength(1);
-      asSimple(result[0]);
+      expectSimple(result[0]);
       expect(para.childTexts()).toEqual(["Hello ", "{{name}}"]);
     });
 
@@ -136,7 +133,7 @@ describe("parseInline", () => {
       const result = parseInline(para);
 
       expect(result).toHaveLength(1);
-      asSimple(result[0]);
+      expectSimple(result[0]);
       expect(para.childTexts()).toEqual(["{{name}}"]);
     });
   });
@@ -149,12 +146,13 @@ describe("parseInline", () => {
       const result = parseInline(para);
 
       expect(result).toHaveLength(2);
-      const simple = asSimple(result[0]);
-      expect(simple.tag.head).toBe("a");
-      const block = asBlock(result[1]);
-      expect(block.openTag.head).toBe("#if");
+      expectSimple(result[0]);
+      expect(result[0].tag.head).toBe("a");
+      const block = result[1];
+      expectBlock(block);
+      expect(block.tag.head).toBe("#if");
       expect(block.children).toHaveLength(1);
-      asSimple(block.children[0]);
+      expectSimple(block.children[0]);
     });
   });
 

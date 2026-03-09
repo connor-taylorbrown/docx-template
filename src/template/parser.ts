@@ -1,23 +1,13 @@
 import { Tag } from "./tag.js";
 import { DocumentNode } from "./document-node.js";
 
-// --- Element types ---
+// --- Element type ---
 
-export interface SimpleElement {
-  kind: "simple";
+export interface Element {
   tag: Tag;
-  node: DocumentNode;
-}
-
-export interface BlockElement {
-  kind: "block";
-  openTag: Tag;
-  openNode: DocumentNode;
-  closeNode: DocumentNode;
+  nodes: [DocumentNode] | [DocumentNode, DocumentNode];
   children: Element[];
 }
-
-export type Element = SimpleElement | BlockElement;
 
 // --- Parser ---
 
@@ -54,18 +44,15 @@ export class Parser {
       if (!scope) {
         throw new SyntaxError(`Unmatched {{#end}}`);
       }
-      const block: BlockElement = {
-        kind: "block",
-        openTag: scope.tag,
-        openNode: scope.node,
-        closeNode: node,
+      this.current().push({
+        tag: scope.tag,
+        nodes: [scope.node, node],
         children: scope.children,
-      };
-      this.current().push(block);
+      });
     } else if (tag.isKeyword) {
       this.stack.push({ tag, node, children: [] });
     } else {
-      this.current().push({ kind: "simple", tag, node });
+      this.current().push({ tag, nodes: [node], children: [] });
     }
   }
 
