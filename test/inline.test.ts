@@ -35,14 +35,14 @@ class TestParagraph extends ParagraphView {
   }
 }
 
-function asSimple(el: Element<Run>): SimpleElement<Run> {
+function asSimple(el: Element): SimpleElement {
   expect(el.kind).toBe("simple");
-  return el as SimpleElement<Run>;
+  return el as SimpleElement;
 }
 
-function asBlock(el: Element<Run>): BlockElement<Run> {
+function asBlock(el: Element): BlockElement {
   expect(el.kind).toBe("block");
-  return el as BlockElement<Run>;
+  return el as BlockElement;
 }
 
 describe("parseInline", () => {

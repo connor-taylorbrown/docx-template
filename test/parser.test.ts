@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { Tag } from "../src/template/tag.js";
+import { DocumentNode } from "../src/template/document-node.js";
 import {
   Parser,
   Element,
   SimpleElement,
   BlockElement,
 } from "../src/template/parser.js";
+
+class TestNode extends DocumentNode {}
 
 /** Helper: build a non-keyword tag. */
 function simple(head: string): Tag {
@@ -29,39 +32,40 @@ function end(): Tag {
 }
 
 /** Type guard helpers for concise assertions. */
-function asSimple(el: Element<string>): SimpleElement<string> {
+function asSimple(el: Element): SimpleElement {
   expect(el.kind).toBe("simple");
-  return el as SimpleElement<string>;
+  return el as SimpleElement;
 }
 
-function asBlock(el: Element<string>): BlockElement<string> {
+function asBlock(el: Element): BlockElement {
   expect(el.kind).toBe("block");
-  return el as BlockElement<string>;
+  return el as BlockElement;
 }
 
 describe("parser", () => {
   describe("root level", () => {
     it("empty input", () => {
-      const parser = new Parser<string>();
+      const parser = new Parser();
       expect(parser.parse()).toEqual([]);
     });
 
     it("single simple element", () => {
       const tag = simple("name");
-      const parser = new Parser<string>();
-      parser.addTag("a", tag);
+      const node = new TestNode();
+      const parser = new Parser();
+      parser.addTag(node, tag);
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
       const el = asSimple(result[0]);
-      expect(el.node).toBe("a");
+      expect(el.node).toBe(node);
       expect(el.tag).toBe(tag);
     });
 
     it("multiple entries at root", () => {
-      const parser = new Parser<string>();
-      parser.addTag("a", simple("x"));
-      parser.addTag("c", simple("y"));
+      const parser = new Parser();
+      parser.addTag(new TestNode(), simple("x"));
+      parser.addTag(new TestNode(), simple("y"));
       const result = parser.parse();
 
       expect(result).toHaveLength(2);
@@ -70,17 +74,17 @@ describe("parser", () => {
     });
 
     it("addCollection splices elements into current scope", () => {
-      const e1: SimpleElement<string> = {
+      const e1: SimpleElement = {
         kind: "simple",
         tag: simple("a"),
-        node: "e1",
+        node: new TestNode(),
       };
-      const e2: SimpleElement<string> = {
+      const e2: SimpleElement = {
         kind: "simple",
         tag: simple("b"),
-        node: "e2",
+        node: new TestNode(),
       };
-      const parser = new Parser<string>();
+      const parser = new Parser();
       parser.addCollection([e1, e2]);
       const result = parser.parse();
 
@@ -94,25 +98,28 @@ describe("parser", () => {
     it("empty block", () => {
       const open = keyword("if");
       const close = end();
-      const parser = new Parser<string>();
-      parser.addTag("open", open);
-      parser.addTag("close", close);
+      const openNode = new TestNode();
+      const closeNode = new TestNode();
+      const parser = new Parser();
+      parser.addTag(openNode, open);
+      parser.addTag(closeNode, close);
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
       const el = asBlock(result[0]);
       expect(el.openTag).toBe(open);
-      expect(el.openNode).toBe("open");
-      expect(el.closeNode).toBe("close");
+      expect(el.openNode).toBe(openNode);
+      expect(el.closeNode).toBe(closeNode);
       expect(el.children).toEqual([]);
     });
 
     it("block with simple element", () => {
       const inner = simple("name");
-      const parser = new Parser<string>();
-      parser.addTag("open", keyword("if"));
-      parser.addTag("inner", inner);
-      parser.addTag("close", end());
+      const innerNode = new TestNode();
+      const parser = new Parser();
+      parser.addTag(new TestNode(), keyword("if"));
+      parser.addTag(innerNode, inner);
+      parser.addTag(new TestNode(), end());
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
@@ -120,24 +127,24 @@ describe("parser", () => {
       expect(block.children).toHaveLength(1);
       const child = asSimple(block.children[0]);
       expect(child.tag).toBe(inner);
-      expect(child.node).toBe("inner");
+      expect(child.node).toBe(innerNode);
     });
 
     it("block with spliced elements", () => {
-      const e1: SimpleElement<string> = {
+      const e1: SimpleElement = {
         kind: "simple",
         tag: simple("a"),
-        node: "e1",
+        node: new TestNode(),
       };
-      const e2: SimpleElement<string> = {
+      const e2: SimpleElement = {
         kind: "simple",
         tag: simple("b"),
-        node: "e2",
+        node: new TestNode(),
       };
-      const parser = new Parser<string>();
-      parser.addTag("open", keyword("if"));
+      const parser = new Parser();
+      parser.addTag(new TestNode(), keyword("if"));
       parser.addCollection([e1, e2]);
-      parser.addTag("close", end());
+      parser.addTag(new TestNode(), end());
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
@@ -150,98 +157,103 @@ describe("parser", () => {
 
   describe("nesting", () => {
     it("nested blocks", () => {
-      const parser = new Parser<string>();
-      parser.addTag("outer-open", keyword("if"));
-      parser.addTag("inner-open", keyword("each"));
-      parser.addTag("inner-close", end());
-      parser.addTag("outer-close", end());
+      const outerOpen = new TestNode();
+      const innerOpen = new TestNode();
+      const parser = new Parser();
+      parser.addTag(outerOpen, keyword("if"));
+      parser.addTag(innerOpen, keyword("each"));
+      parser.addTag(new TestNode(), end());
+      parser.addTag(new TestNode(), end());
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
       const outer = asBlock(result[0]);
-      expect(outer.openNode).toBe("outer-open");
+      expect(outer.openNode).toBe(outerOpen);
       expect(outer.children).toHaveLength(1);
       const inner = asBlock(outer.children[0]);
-      expect(inner.openNode).toBe("inner-open");
+      expect(inner.openNode).toBe(innerOpen);
       expect(inner.children).toEqual([]);
     });
 
     it("elements around nested block", () => {
-      const before: SimpleElement<string> = {
+      const before: SimpleElement = {
         kind: "simple",
         tag: simple("x"),
-        node: "before",
+        node: new TestNode(),
       };
-      const after: SimpleElement<string> = {
+      const after: SimpleElement = {
         kind: "simple",
         tag: simple("y"),
-        node: "after",
+        node: new TestNode(),
       };
-      const parser = new Parser<string>();
-      parser.addTag("outer-open", keyword("if"));
+      const innerOpen = new TestNode();
+      const parser = new Parser();
+      parser.addTag(new TestNode(), keyword("if"));
       parser.addCollection([before]);
-      parser.addTag("inner-open", keyword("each"));
-      parser.addTag("inner-close", end());
+      parser.addTag(innerOpen, keyword("each"));
+      parser.addTag(new TestNode(), end());
       parser.addCollection([after]);
-      parser.addTag("outer-close", end());
+      parser.addTag(new TestNode(), end());
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
       const outer = asBlock(result[0]);
       expect(outer.children).toHaveLength(3);
       expect(outer.children[0]).toBe(before);
-      expect(asBlock(outer.children[1]).openNode).toBe("inner-open");
+      expect(asBlock(outer.children[1]).openNode).toBe(innerOpen);
       expect(outer.children[2]).toBe(after);
     });
   });
 
   describe("error cases", () => {
     it("unmatched #end", () => {
-      const parser = new Parser<string>();
-      expect(() => parser.addTag("x", end())).toThrow(SyntaxError);
+      const parser = new Parser();
+      expect(() => parser.addTag(new TestNode(), end())).toThrow(SyntaxError);
     });
 
     it("unclosed block", () => {
-      const parser = new Parser<string>();
-      parser.addTag("open", keyword("if"));
+      const parser = new Parser();
+      parser.addTag(new TestNode(), keyword("if"));
       expect(() => parser.parse()).toThrow(SyntaxError);
     });
 
     it("nested unclosed block", () => {
-      const parser = new Parser<string>();
-      parser.addTag("outer", keyword("if"));
-      parser.addTag("inner", keyword("each"));
-      parser.addTag("inner-close", end());
+      const parser = new Parser();
+      parser.addTag(new TestNode(), keyword("if"));
+      parser.addTag(new TestNode(), keyword("each"));
+      parser.addTag(new TestNode(), end());
       expect(() => parser.parse()).toThrow(SyntaxError);
     });
   });
 
   describe("mixed sequences", () => {
     it("elements before and after block", () => {
-      const el: SimpleElement<string> = {
+      const el: SimpleElement = {
         kind: "simple",
         tag: simple("z"),
-        node: "z",
+        node: new TestNode(),
       };
-      const parser = new Parser<string>();
+      const openNode = new TestNode();
+      const afterNode = new TestNode();
+      const parser = new Parser();
       parser.addCollection([el]);
-      parser.addTag("open", keyword("if"));
-      parser.addTag("close", end());
-      parser.addTag("after", simple("w"));
+      parser.addTag(openNode, keyword("if"));
+      parser.addTag(new TestNode(), end());
+      parser.addTag(afterNode, simple("w"));
       const result = parser.parse();
 
       expect(result).toHaveLength(3);
       expect(result[0]).toBe(el);
-      expect(asBlock(result[1]).openNode).toBe("open");
-      expect(asSimple(result[2]).node).toBe("after");
+      expect(asBlock(result[1]).openNode).toBe(openNode);
+      expect(asSimple(result[2]).node).toBe(afterNode);
     });
 
     it("sibling blocks", () => {
-      const parser = new Parser<string>();
-      parser.addTag("a-open", keyword("if"));
-      parser.addTag("a-close", end());
-      parser.addTag("b-open", keyword("each"));
-      parser.addTag("b-close", end());
+      const parser = new Parser();
+      parser.addTag(new TestNode(), keyword("if"));
+      parser.addTag(new TestNode(), end());
+      parser.addTag(new TestNode(), keyword("each"));
+      parser.addTag(new TestNode(), end());
       const result = parser.parse();
 
       expect(result).toHaveLength(2);
@@ -252,22 +264,24 @@ describe("parser", () => {
     });
 
     it("block with mixed children", () => {
-      const parser = new Parser<string>();
-      parser.addTag("outer-open", keyword("if"));
-      parser.addTag("elem", simple("name"));
-      parser.addTag("inner-open", keyword("each"));
-      parser.addTag("inner-elem", simple("item"));
-      parser.addTag("inner-close", end());
-      parser.addTag("outer-close", end());
+      const elemNode = new TestNode();
+      const innerElemNode = new TestNode();
+      const parser = new Parser();
+      parser.addTag(new TestNode(), keyword("if"));
+      parser.addTag(elemNode, simple("name"));
+      parser.addTag(new TestNode(), keyword("each"));
+      parser.addTag(innerElemNode, simple("item"));
+      parser.addTag(new TestNode(), end());
+      parser.addTag(new TestNode(), end());
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
       const outer = asBlock(result[0]);
       expect(outer.children).toHaveLength(2);
-      expect(asSimple(outer.children[0]).node).toBe("elem");
+      expect(asSimple(outer.children[0]).node).toBe(elemNode);
       const inner = asBlock(outer.children[1]);
       expect(inner.children).toHaveLength(1);
-      expect(asSimple(inner.children[0]).node).toBe("inner-elem");
+      expect(asSimple(inner.children[0]).node).toBe(innerElemNode);
     });
   });
 });

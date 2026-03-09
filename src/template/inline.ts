@@ -21,14 +21,14 @@ export abstract class ParagraphView {
  * Inline parser orchestrator. Detects tags, normalises runs, feeds the
  * parser, and returns the resulting element children.
  */
-export function parseInline(view: ParagraphView): Element<Run>[] {
+export function parseInline(view: ParagraphView): Element[] {
   const tags = detectTags(view.text());
   if (tags.length === 0) return [];
 
   const entries = normalise(view.runs(), tags);
   view.replaceChildren(entries.map((e) => e.content));
 
-  const parser = new Parser<Run>();
+  const parser = new Parser();
   for (const { tag, content } of entries) {
     if (tag) {
       parser.addTag(content, tag);

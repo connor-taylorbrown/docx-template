@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { DocumentNode } from "../src/template/document-node.js";
 import { Parser, Element, SimpleElement, BlockElement } from "../src/template/parser.js";
 import { ParagraphView, parseInline } from "../src/template/inline.js";
 import { Run } from "../src/template/run.js";
@@ -88,17 +87,17 @@ function container(...children: TestTreeNode[]): TestTreeNode {
 }
 
 function reader(): TreeReader {
-  return new TreeReader(new Parser<DocumentNode>(), parseInline);
+  return new TreeReader(new Parser(), parseInline);
 }
 
-function asSimple(el: Element<DocumentNode>): SimpleElement<DocumentNode> {
+function asSimple(el: Element): SimpleElement {
   expect(el.kind).toBe("simple");
-  return el as SimpleElement<DocumentNode>;
+  return el as SimpleElement;
 }
 
-function asBlock(el: Element<DocumentNode>): BlockElement<DocumentNode> {
+function asBlock(el: Element): BlockElement {
   expect(el.kind).toBe("block");
-  return el as BlockElement<DocumentNode>;
+  return el as BlockElement;
 }
 
 describe("TreeReader", () => {

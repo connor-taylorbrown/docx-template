@@ -48,7 +48,7 @@ export abstract class TreeNode extends DocumentNode {
  * returns the resulting elements. Extracted as a type to enable
  * constructor injection and test mocking.
  */
-export type InlineParser = (view: ParagraphView) => Element<DocumentNode>[];
+export type InlineParser = (view: ParagraphView) => Element[];
 
 /**
  * Recursive document tree reader. Traverses a document tree in order,
@@ -57,10 +57,10 @@ export type InlineParser = (view: ParagraphView) => Element<DocumentNode>[];
  * element tree.
  */
 export class TreeReader {
-  private readonly parser: Parser<DocumentNode>;
+  private readonly parser: Parser;
   private readonly inlineParser: InlineParser;
 
-  constructor(parser: Parser<DocumentNode>, inlineParser: InlineParser) {
+  constructor(parser: Parser, inlineParser: InlineParser) {
     this.parser = parser;
     this.inlineParser = inlineParser;
   }
@@ -96,7 +96,7 @@ export class TreeReader {
    * Finalise parsing after the tree has been classified.
    * Returns the root element list. Throws on unclosed blocks.
    */
-  result(): Element<DocumentNode>[] {
+  result(): Element[] {
     return this.parser.parse();
   }
 }
