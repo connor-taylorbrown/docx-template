@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { Run } from "../src/template/run.js";
 import {
   Element,
-  ContentElement,
   SimpleElement,
   BlockElement,
 } from "../src/template/parser.js";
@@ -34,11 +33,6 @@ class TestParagraph extends ParagraphView {
   childTexts(): string[] {
     return this._runs.map((r) => r.text);
   }
-}
-
-function asContent(el: Element<Run>): ContentElement<Run> {
-  expect(el.kind).toBe("content");
-  return el as ContentElement<Run>;
 }
 
 function asSimple(el: Element<Run>): SimpleElement<Run> {
@@ -75,10 +69,8 @@ describe("parseInline", () => {
       const para = new TestParagraph([new TestRun("Hello {{name}} world")]);
       const result = parseInline(para);
 
-      expect(result).toHaveLength(3);
-      asContent(result[0]);
-      asSimple(result[1]);
-      asContent(result[2]);
+      expect(result).toHaveLength(1);
+      asSimple(result[0]);
       expect(para.childTexts()).toEqual(["Hello ", "{{name}}", " world"]);
     });
   });
@@ -93,8 +85,7 @@ describe("parseInline", () => {
       expect(result).toHaveLength(1);
       const block = asBlock(result[0]);
       expect(block.openTag.head).toBe("#if");
-      expect(block.children).toHaveLength(1);
-      asContent(block.children[0]);
+      expect(block.children).toEqual([]);
     });
 
     it("empty inline block", () => {
@@ -131,9 +122,8 @@ describe("parseInline", () => {
       ]);
       const result = parseInline(para);
 
-      expect(result).toHaveLength(2);
-      asContent(result[0]);
-      asSimple(result[1]);
+      expect(result).toHaveLength(1);
+      asSimple(result[0]);
       expect(para.childTexts()).toEqual(["Hello ", "{{name}}"]);
     });
 

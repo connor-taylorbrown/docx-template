@@ -32,8 +32,6 @@ export function parseInline(view: ParagraphView): Element<Run>[] {
   for (const { tag, content } of entries) {
     if (tag) {
       parser.addTag(content, tag);
-    } else {
-      parser.addCollection(content, []);
     }
   }
   return parser.parse();

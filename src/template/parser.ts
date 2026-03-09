@@ -2,12 +2,6 @@ import { Tag } from "./tag.js";
 
 // --- Element types ---
 
-export interface ContentElement<N> {
-  kind: "content";
-  node: N;
-  elements: Element<N>[];
-}
-
 export interface SimpleElement<N> {
   kind: "simple";
   tag: Tag;
@@ -17,13 +11,12 @@ export interface SimpleElement<N> {
 export interface BlockElement<N> {
   kind: "block";
   openTag: Tag;
-  closeTag: Tag;
   openNode: N;
   closeNode: N;
   children: Element<N>[];
 }
 
-export type Element<N> = ContentElement<N> | SimpleElement<N> | BlockElement<N>;
+export type Element<N> = SimpleElement<N> | BlockElement<N>;
 
 // --- Parser ---
 
@@ -35,7 +28,7 @@ interface Scope<N> {
 
 /**
  * On-line, stack-based scope tracker. Builds an element tree from a
- * stream of tag nodes and element collection nodes.
+ * stream of tag nodes and element collections.
  *
  * Generic over node type N (Run for inline, paragraph node for multi-line).
  */
@@ -65,7 +58,6 @@ export class Parser<N> {
       const block: BlockElement<N> = {
         kind: "block",
         openTag: scope.tag,
-        closeTag: tag,
         openNode: scope.node,
         closeNode: node,
         children: scope.children,
@@ -79,11 +71,10 @@ export class Parser<N> {
   }
 
   /**
-   * Push a node with pre-parsed child elements (may be empty).
-   * Adds a content entry to the current scope.
+   * Splice pre-parsed elements into the current scope.
    */
-  addCollection(node: N, elements: Element<N>[]): void {
-    this.current().push({ kind: "content", node, elements });
+  addCollection(elements: Element<N>[]): void {
+    this.current().push(...elements);
   }
 
   /**

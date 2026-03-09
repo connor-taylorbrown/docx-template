@@ -82,7 +82,9 @@ export class TreeReader {
           this.parser.addTag(child, tag);
         } else {
           const elements = this.inlineParser(child.paragraphView());
-          this.parser.addCollection(child, elements);
+          if (elements.length > 0) {
+            this.parser.addCollection(elements);
+          }
         }
       } else {
         this.classify(child);
