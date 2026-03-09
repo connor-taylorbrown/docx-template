@@ -10,3 +10,23 @@ export interface Tag {
   /** Whether this is a keyword tag (head starts with #). */
   isKeyword: boolean;
 }
+
+const TAG_PATTERN = /\{\{(#?\w+)(.*?)\}\}/g;
+
+export function detectTags(text: string): Tag[] {
+  const tags: Tag[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = TAG_PATTERN.exec(text)) !== null) {
+    const head = match[1];
+    const params = match[2].trim() || null;
+    tags.push({
+      offset: match.index,
+      length: match[0].length,
+      head,
+      params,
+      isKeyword: head.startsWith("#"),
+    });
+  }
+  TAG_PATTERN.lastIndex = 0;
+  return tags;
+}
