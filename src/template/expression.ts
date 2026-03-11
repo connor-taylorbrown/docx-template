@@ -1,52 +1,33 @@
-/* eslint-disable @typescript-eslint/no-duplicate-enum-values -- precedence is intentionally shared */
-export const enum Operator {
-  PAREN = 0,
-  APPLY = 10,
-  OR = 20,
-  AND = 30,
-  EQ = 40,
-  NEQ = 40,
-  LT = 50,
-  LTE = 50,
-  GT = 50,
-  GTE = 50,
-  IN = 50,
-  ADD = 60,
-  SUB = 60,
-  MUL = 70,
-  DIV = 70,
-  NOT = 80,
-  NEG = 80,
-  DOT = 90,
-}
-/* eslint-enable @typescript-eslint/no-duplicate-enum-values */
-
 export interface Expression {
-  operator: Operator | null;
+  operator: string | null;
   operands: Expression[];
   value: string | null;
 }
 
-const BINARY_OPERATORS: ReadonlyMap<string, Operator> = new Map([
-  [".", Operator.DOT],
-  ["/", Operator.DIV],
-  ["*", Operator.MUL],
-  ["+", Operator.ADD],
-  ["-", Operator.SUB],
-  ["<", Operator.LT],
-  ["<=", Operator.LTE],
-  [">", Operator.GT],
-  [">=", Operator.GTE],
-  ["=", Operator.EQ],
-  ["!=", Operator.NEQ],
-  ["and", Operator.AND],
-  ["or", Operator.OR],
-  ["in", Operator.IN],
+const PAREN = "(";
+const APPLY = "";
+
+const BINARY_PRECEDENCE: ReadonlyMap<string, number> = new Map([
+  [".", 90],
+  ["/", 70],
+  ["*", 70],
+  ["+", 60],
+  ["-", 60],
+  ["<", 50],
+  ["<=", 50],
+  [">", 50],
+  [">=", 50],
+  ["in", 50],
+  ["=", 40],
+  ["!=", 40],
+  ["and", 30],
+  ["or", 20],
+  [APPLY, 10],
 ]);
 
-const UNARY_OPERATORS: ReadonlyMap<string, Operator> = new Map([
-  ["-", Operator.NEG],
-  ["not", Operator.NOT],
+const UNARY_PRECEDENCE: ReadonlyMap<string, number> = new Map([
+  ["-", 80],
+  ["not", 80],
 ]);
 
 // Matches: symbol operators, word operators, parentheses, dot-separated
@@ -56,8 +37,9 @@ const TOKEN_PATTERN =
   /!=|<=|>=|[+\-*/<>=()]|(?:and|or|not|in)(?=\s|[()]|$)|[^\s+\-*/<>=()!]+/g;
 
 interface OpEntry {
-  operator: Operator;
+  operator: string;
   unary: boolean;
+  precedence: number;
 }
 
 function popOperator(output: Expression[], ops: OpEntry[]): void {
@@ -77,9 +59,15 @@ function expandDots(token: string): Expression {
   let expr: Expression = { operator: null, operands: [], value: parts[0] };
   for (let i = 1; i < parts.length; i++) {
     const right: Expression = { operator: null, operands: [], value: parts[i] };
-    expr = { operator: Operator.DOT, operands: [expr, right], value: null };
+    expr = { operator: ".", operands: [expr, right], value: null };
   }
   return expr;
+}
+
+function shouldPop(ops: OpEntry[], precedence: number): boolean {
+  if (!ops.length) return false;
+  const top = ops[ops.length - 1];
+  return top.operator !== PAREN && top.precedence >= precedence;
 }
 
 export function parse(input: string): Expression {
@@ -95,24 +83,21 @@ export function parse(input: string): Expression {
   let expectOperand = true;
 
   for (const token of tokens) {
-    if (token === "(") {
+    if (token === PAREN) {
       if (!expectOperand) {
-        while (
-          ops.length &&
-          ops[ops.length - 1].operator !== Operator.PAREN &&
-          ops[ops.length - 1].operator >= Operator.APPLY
-        ) {
+        const precedence = BINARY_PRECEDENCE.get(APPLY)!;
+        while (shouldPop(ops, precedence)) {
           popOperator(output, ops);
         }
-        ops.push({ operator: Operator.APPLY, unary: false });
+        ops.push({ operator: APPLY, unary: false, precedence });
       }
-      ops.push({ operator: Operator.PAREN, unary: false });
+      ops.push({ operator: PAREN, unary: false, precedence: 0 });
       expectOperand = true;
       continue;
     }
 
     if (token === ")") {
-      while (ops.length && ops[ops.length - 1].operator !== Operator.PAREN) {
+      while (ops.length && ops[ops.length - 1].operator !== PAREN) {
         popOperator(output, ops);
       }
       ops.pop();
@@ -121,36 +106,29 @@ export function parse(input: string): Expression {
     }
 
     if (expectOperand) {
-      const unOp = UNARY_OPERATORS.get(token);
-      if (unOp !== undefined) {
-        ops.push({ operator: unOp, unary: true });
+      const precedence = UNARY_PRECEDENCE.get(token);
+      if (precedence !== undefined) {
+        ops.push({ operator: token, unary: true, precedence });
         continue;
       }
     }
 
     if (!expectOperand) {
-      const binOp = BINARY_OPERATORS.get(token);
-      if (binOp !== undefined) {
-        while (
-          ops.length &&
-          ops[ops.length - 1].operator !== Operator.PAREN &&
-          ops[ops.length - 1].operator >= binOp
-        ) {
+      const precedence = BINARY_PRECEDENCE.get(token);
+      if (precedence !== undefined) {
+        while (shouldPop(ops, precedence)) {
           popOperator(output, ops);
         }
-        ops.push({ operator: binOp, unary: false });
+        ops.push({ operator: token, unary: false, precedence });
         expectOperand = true;
         continue;
       }
 
-      while (
-        ops.length &&
-        ops[ops.length - 1].operator !== Operator.PAREN &&
-        ops[ops.length - 1].operator >= Operator.APPLY
-      ) {
+      const applyPrecedence = BINARY_PRECEDENCE.get(APPLY)!;
+      while (shouldPop(ops, applyPrecedence)) {
         popOperator(output, ops);
       }
-      ops.push({ operator: Operator.APPLY, unary: false });
+      ops.push({ operator: APPLY, unary: false, precedence: applyPrecedence });
     }
 
     output.push(expandDots(token));
