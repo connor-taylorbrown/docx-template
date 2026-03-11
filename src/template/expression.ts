@@ -1,33 +1,55 @@
+import { Operator } from "./operator.js";
+
+export { Operator };
+
 export interface Expression {
-  operator: string | null;
+  operator: Operator | null;
   operands: Expression[];
   value: string | null;
 }
 
 const PAREN = "(";
-const APPLY = "";
 
-const BINARY_PRECEDENCE: ReadonlyMap<string, number> = new Map([
-  [".", 90],
-  ["/", 70],
-  ["*", 70],
-  ["+", 60],
-  ["-", 60],
-  ["<", 50],
-  ["<=", 50],
-  [">", 50],
-  [">=", 50],
-  ["in", 50],
-  ["=", 40],
-  ["!=", 40],
-  ["and", 30],
-  ["or", 20],
-  [APPLY, 10],
+const BINARY_OPERATORS: ReadonlyMap<string, Operator> = new Map([
+  [".", Operator.DOT],
+  ["/", Operator.DIV],
+  ["*", Operator.MUL],
+  ["+", Operator.ADD],
+  ["-", Operator.SUB],
+  ["<", Operator.LT],
+  ["<=", Operator.LTE],
+  [">", Operator.GT],
+  [">=", Operator.GTE],
+  ["=", Operator.EQ],
+  ["!=", Operator.NEQ],
+  ["and", Operator.AND],
+  ["or", Operator.OR],
+  ["in", Operator.IN],
 ]);
 
-const UNARY_PRECEDENCE: ReadonlyMap<string, number> = new Map([
-  ["-", 80],
-  ["not", 80],
+const UNARY_OPERATORS: ReadonlyMap<string, Operator> = new Map([
+  ["-", Operator.NEG],
+  ["not", Operator.NOT],
+]);
+
+const PRECEDENCE: ReadonlyMap<Operator, number> = new Map([
+  [Operator.DOT, 90],
+  [Operator.NEG, 80],
+  [Operator.NOT, 80],
+  [Operator.MUL, 70],
+  [Operator.DIV, 70],
+  [Operator.ADD, 60],
+  [Operator.SUB, 60],
+  [Operator.LT, 50],
+  [Operator.LTE, 50],
+  [Operator.GT, 50],
+  [Operator.GTE, 50],
+  [Operator.IN, 50],
+  [Operator.EQ, 40],
+  [Operator.NEQ, 40],
+  [Operator.AND, 30],
+  [Operator.OR, 20],
+  [Operator.APPLY, 10],
 ]);
 
 // Matches: symbol operators, word operators, parentheses, dot-separated
@@ -37,13 +59,13 @@ const TOKEN_PATTERN =
   /!=|<=|>=|[+\-*/<>=()]|(?:and|or|not|in)(?=\s|[()]|$)|[^\s+\-*/<>=()!]+/g;
 
 interface OpEntry {
-  operator: string;
+  operator: Operator | typeof PAREN;
   unary: boolean;
   precedence: number;
 }
 
 function popOperator(output: Expression[], ops: OpEntry[]): void {
-  const { operator, unary } = ops.pop()!;
+  const { operator, unary } = ops.pop()! as { operator: Operator; unary: boolean };
   if (unary) {
     const operand = output.pop()!;
     output.push({ operator, operands: [operand], value: null });
@@ -59,7 +81,7 @@ function expandDots(token: string): Expression {
   let expr: Expression = { operator: null, operands: [], value: parts[0] };
   for (let i = 1; i < parts.length; i++) {
     const right: Expression = { operator: null, operands: [], value: parts[i] };
-    expr = { operator: ".", operands: [expr, right], value: null };
+    expr = { operator: Operator.DOT, operands: [expr, right], value: null };
   }
   return expr;
 }
@@ -81,15 +103,15 @@ export function parse(input: string): Expression {
   const output: Expression[] = [];
   const ops: OpEntry[] = [];
   let expectOperand = true;
+  const applyPrecedence = PRECEDENCE.get(Operator.APPLY)!;
 
   for (const token of tokens) {
     if (token === PAREN) {
       if (!expectOperand) {
-        const precedence = BINARY_PRECEDENCE.get(APPLY)!;
-        while (shouldPop(ops, precedence)) {
+        while (shouldPop(ops, applyPrecedence)) {
           popOperator(output, ops);
         }
-        ops.push({ operator: APPLY, unary: false, precedence });
+        ops.push({ operator: Operator.APPLY, unary: false, precedence: applyPrecedence });
       }
       ops.push({ operator: PAREN, unary: false, precedence: 0 });
       expectOperand = true;
@@ -106,29 +128,29 @@ export function parse(input: string): Expression {
     }
 
     if (expectOperand) {
-      const precedence = UNARY_PRECEDENCE.get(token);
-      if (precedence !== undefined) {
-        ops.push({ operator: token, unary: true, precedence });
+      const op = UNARY_OPERATORS.get(token);
+      if (op !== undefined) {
+        ops.push({ operator: op, unary: true, precedence: PRECEDENCE.get(op)! });
         continue;
       }
     }
 
     if (!expectOperand) {
-      const precedence = BINARY_PRECEDENCE.get(token);
-      if (precedence !== undefined) {
+      const op = BINARY_OPERATORS.get(token);
+      if (op !== undefined) {
+        const precedence = PRECEDENCE.get(op)!;
         while (shouldPop(ops, precedence)) {
           popOperator(output, ops);
         }
-        ops.push({ operator: token, unary: false, precedence });
+        ops.push({ operator: op, unary: false, precedence });
         expectOperand = true;
         continue;
       }
 
-      const applyPrecedence = BINARY_PRECEDENCE.get(APPLY)!;
       while (shouldPop(ops, applyPrecedence)) {
         popOperator(output, ops);
       }
-      ops.push({ operator: APPLY, unary: false, precedence: applyPrecedence });
+      ops.push({ operator: Operator.APPLY, unary: false, precedence: applyPrecedence });
     }
 
     output.push(expandDots(token));
