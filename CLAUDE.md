@@ -24,6 +24,11 @@ Template engine for DOCX documents. Parses `{{tag}}` syntax from document trees,
 - `run.ts` — abstract `Run` class (split/merge operations)
 - `tree-reader.ts` — abstract `TreeNode`, `TreeReader` recursive traversal
 - `document-node.ts` — `DocumentNode` base class
+- `operator.ts` — `Operator` enum, `Literal` enum
+- `expression.ts` — `Expression` interface, tokenizer, `parseExpression()`
+- `resolve.ts` — `Resolver` class, `TypedElement`, `FunctionRegistry`
+- `reference-map.ts` — `ReferenceMap` (scoped variable bindings)
+- `analyse.ts` — `resolveHint()`, `analyse()` orchestrator
 
 ### DOM implementation (`src/dom/`)
 - `node.ts`, `run.ts`, `paragraph.ts` — HTML element wrappers for docx-preview output
@@ -42,3 +47,4 @@ Template engine for DOCX documents. Parses `{{tag}}` syntax from document trees,
 - See `arch/` for design documents
 - `arch/codebase-overview.md` — full structural overview with type hierarchy
 - `arch/renderer.md` — renderer and expression system design
+- `arch/analysis.md` — static analysis design (two-pass type hinting, ReferenceMap, element orchestration)

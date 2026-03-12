@@ -1,0 +1,7 @@
+Hello {{name}},
+{{#if active}}
+  Your balance is {{account.balance + bonus}}.
+{{#end}}
+{{#each item in orders}}
+  {{item.product}} — {{item.qty * item.price}}
+{{#end}}

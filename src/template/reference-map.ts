@@ -88,6 +88,10 @@ export class ReferenceMap {
     }
   }
 
+  entries(): IterableIterator<[string, TypeBinding]> {
+    return this.context.entries();
+  }
+
   declare(name: string): ReferenceMap {
     const childScope = new Map(this.scope);
     childScope.set(name, { strong: false, type: { kind: "string" } });
