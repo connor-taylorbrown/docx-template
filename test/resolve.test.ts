@@ -220,25 +220,7 @@ describe("Resolver", () => {
 
     it("non-name left operand", () => {
       const r = new Resolver(emptyRegistry());
-      // Construct manually: (a + b) applied to c
-      const expr = {
-        operator: Operator.APPLY,
-        operands: [
-          {
-            operator: Operator.ADD,
-            operands: [
-              { operator: null, operands: [], value: "a", literal: null },
-              { operator: null, operands: [], value: "b", literal: null },
-            ],
-            value: null,
-            literal: null,
-          },
-          { operator: null, operands: [], value: "c", literal: null },
-        ],
-        value: null,
-        literal: null,
-      };
-      expect(() => r.resolve(expr)).toThrow(
+      expect(() => r.resolve(parse("(a + b) c"))).toThrow(
         "Left operand of function call must be a name",
       );
     });
