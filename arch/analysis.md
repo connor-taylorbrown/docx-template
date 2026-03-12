@@ -71,7 +71,7 @@ type BaseType =
 
 Boolean and string hints are always weak. Collection, structure, and number hints are strong.
 
-### ReferenceMap (`analyse.ts` — implemented)
+### ReferenceMap (`reference-map.ts` — implemented)
 
 The reference map tracks variable bindings with explicit scoping. It consists of two layers: a shared `context` for global variables, and a per-instance `scope` for scoped variable declarations (e.g. `#each` loop variables).
 
@@ -121,9 +121,9 @@ When `bind` encounters an existing binding:
 - **Strong hint + strong binding**: assert compatibility, then merge.
 - **Weak hint + weak binding**: merge.
 
-#### Compatibility (not yet enforced)
+#### Compatibility (`assertCompatible` — implemented)
 
-Strong/strong conflicts between incompatible kinds should throw:
+Strong/strong conflicts between incompatible kinds throw. Same-kind is always compatible.
 
 | | Collection | Structure | Number | Boolean | String |
 |---|---|---|---|---|---|
@@ -135,13 +135,13 @@ Strong/strong conflicts between incompatible kinds should throw:
 
 Boolean and string hints are always weak, so they never reach a strong/strong assertion. A strong/strong conflict means e.g. collection vs number, structure vs collection — a real type error.
 
-#### Merging (not yet implemented)
+#### Merging (`mergeInto` — implemented)
 
-When the hint and binding are compatible, `bind` should merge rather than replace:
+When the hint and binding are compatible, `bind` merges rather than replaces:
 
-- **Structure + structure**: union the property maps. If both have the same property, merge the property hints recursively.
-- **Collection + collection**: merge item types (if both present).
-- **Number + number**: `integer` is stricter than unspecified. If one side says integer and the other doesn't, keep integer.
+- **Structure + structure**: union the property maps. Overlapping properties merge recursively.
+- **Collection + collection**: merge item types (if both present, recurse; if only one has an item, adopt it).
+- **Number + number**: `integer` is sticky — if either side says integer, result is integer.
 - **Same kind, no substructure** (boolean, string): no-op.
 
 ```ts
@@ -152,6 +152,8 @@ bind(name, hint):
   // Assert
   if hint.strong && existing.strong:
     assertCompatible(hint.type, existing.type)  // throws on kind mismatch
+    mergeInto(existing.type, hint.type)
+    return
 
   // Strengthen
   if hint.strong && !existing.strong:
@@ -159,9 +161,9 @@ bind(name, hint):
     existing.type = hint.type
     return
 
-  // Merge (strong+strong after assertion, or weak+weak)
-  if existing.strong || hint.strong:
-    mergeInto(existing.type, hint.type)          // accumulates properties, items
+  // Weak + weak: merge
+  if !hint.strong && !existing.strong:
+    mergeInto(existing.type, hint.type)
 ```
 
 Merging is where `a.b` followed by `a.c` produces `structure { b, c }`. Without it, the second DOT hint replaces the first (on strengthen) or is silently dropped (weak+strong no-op). Neither is correct.
@@ -190,8 +192,6 @@ This ordering is deliberate: the collection's item type is not known until after
 
 ## Next steps
 
-1. **`assertCompatible`**: strong/strong binding conflicts should throw. Currently `bind` silently ignores incompatible strong hints (e.g. a variable used as both a collection and a number). The compatibility table from renderer.md should be enforced.
-2. **`mergeHints`**: when a structure-typed variable is used in multiple DOT expressions (e.g. `a.b` then `a.c`), the property maps should merge rather than one replacing the other. Same for collection item types.
-3. **APPLY return type assertions**: `node.returnType` from pass 1 is available but not yet used in `resolveHint`. It should be asserted against the parent hint.
-4. **Function registry**: define built-in functions and their signatures.
-5. **Literal detection**: leaf nodes that are numeric literals (e.g. `1`, `3.14`) should not be bound as variables. `resolveHint` should detect and skip them, or bind them with a fixed numeric type.
+1. **APPLY return type assertions**: `node.returnType` from pass 1 is available but not yet used in `resolveHint`. It should be asserted against the parent hint.
+2. **Function registry**: define built-in functions and their signatures.
+3. **Literal detection**: leaf nodes that are numeric literals (e.g. `1`, `3.14`) should not be bound as variables. `resolveHint` should detect and skip them, or bind them with a fixed numeric type.

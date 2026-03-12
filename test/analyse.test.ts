@@ -163,6 +163,17 @@ describe("resolveHint", () => {
       const props = (refs.get("a")!.type as { kind: "structure"; properties: Map<string, TypeHint> }).properties;
       expect(props.get("b")).toEqual(str);
     });
+
+    it("multiple DOT on same variable merges properties", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("a.b"), str, refs);
+      resolveHint(resolve("a.c"), num, refs);
+      const props = (refs.get("a")!.type as { kind: "structure"; properties: Map<string, TypeHint> }).properties;
+      expect(props.has("b")).toBe(true);
+      expect(props.has("c")).toBe(true);
+      expect(props.get("b")).toEqual(str);
+      expect(props.get("c")).toEqual(num);
+    });
   });
 });
 
