@@ -1,8 +1,16 @@
 import { Operator } from "./operator.js";
 import type { Expression } from "./expression.js";
 
+export type BaseType =
+  | { kind: "string" }
+  | { kind: "boolean" }
+  | { kind: "number"; integer?: boolean }
+  | { kind: "collection"; item?: TypeHint }
+  | { kind: "structure"; properties: Map<string, TypeHint> };
+
 export interface TypeHint {
   strong: boolean;
+  type: BaseType;
 }
 
 export interface TypedElement {

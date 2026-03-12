@@ -106,10 +106,10 @@ describe("Resolver", () => {
   });
 
   describe("APPLY", () => {
-    const P1: TypeHint = { strong: true };
-    const P2: TypeHint = { strong: false };
-    const P3: TypeHint = { strong: true };
-    const Ret: TypeHint = { strong: false };
+    const P1: TypeHint = { strong: true, type: { kind: "number" } };
+    const P2: TypeHint = { strong: false, type: { kind: "string" } };
+    const P3: TypeHint = { strong: true, type: { kind: "boolean" } };
+    const Ret: TypeHint = { strong: false, type: { kind: "number" } };
 
     it("1 arg", () => {
       const r = new Resolver(fakeRegistry({ fn: [P1, Ret] }));
