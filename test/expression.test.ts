@@ -274,6 +274,28 @@ describe("parse", () => {
     });
   });
 
+  describe("dot references", () => {
+    it("chain", () => {
+      expect(parse("a.b.c")).toEqual(
+        binary(
+          Operator.DOT,
+          binary(Operator.DOT, leaf("a"), leaf("b")),
+          leaf("c")
+        )
+      )
+    });
+
+    it("after parenthesised expression", () => {
+      expect(parse("(fn a).b")).toEqual(
+        binary(
+          Operator.DOT,
+          binary(Operator.APPLY, leaf("fn"), leaf("a")),
+          leaf("b"),
+        )
+      );
+    });
+  })
+
   describe("function invocation", () => {
     it("single argument", () => {
       expect(parse("fn a")).toEqual(

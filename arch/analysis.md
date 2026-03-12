@@ -1,125 +1,158 @@
-# Static Analysis Sketch
+# Static Analysis
 
-## TypedElement
+Static analysis proceeds in two passes over parsed expressions, followed by element-level orchestration.
 
-A unified recursive type for both element-level and expression-level nodes:
+## Pass 1: Rule resolution (`resolve.ts` — implemented)
+
+Converts `Expression` → `TypedElement`, building the tree structure and resolving function signatures. No type hints flow in this pass.
+
+### TypedElement
 
 ```ts
 interface TypedElement {
   operator: Operator | null;
   operands: TypedElement[];
   value: string | null;
-  element: Element | null;   // non-null at element level, null for expression nodes
-  children: TypedElement[];  // non-empty only for block elements
+  rule: TypeHint | null;       // APPLY nodes only: param hint for right operand
+  returnType: TypeHint | null; // outermost APPLY only: function return type
 }
+```
+
+At the element level (pass 2), two additional fields are needed:
+```ts
+  element: Element | null;     // non-null at element level
+  children: TypedElement[];    // non-empty only for block elements
 ```
 
 Node kinds:
 - **Leaf**: `operator: null`, `value` is a variable name or literal.
-- **Expression node**: `operator` is ADD, DOT, etc. `operands` are sub-expressions. `element: null`, `children: []`.
-- **Simple element**: element node *is* the expression root. `element` set, `children` from nested elements.
-- **`#if` element**: `operator: IF`, `operands[0]` is the resolved condition expression.
-- **`#each` element**: `operator: EACH`, `operands[0]` is the scoped variable declaration (leaf), `operands[1]` is the resolved collection expression. The `IN` node from parsing is consumed and does not appear in output.
+- **Expression node**: `operator` is ADD, DOT, etc. `operands` are sub-expressions.
+- **APPLY node**: `rule` is the parameter hint for its right operand. Only the outermost APPLY in a function call chain has `returnType` set.
 
-## analyse(element: Element): TypedElement
+### Resolver
+
+`Resolver` is a class parameterised by a `FunctionRegistry`:
 
 ```ts
-function analyse(element: Element): TypedElement {
-  const { tag } = element;
-
-  if (!tag.isKeyword) {
-    const expr = parse(tag.head + (tag.params ? " " + tag.params : ""));
-    const hint: TypeHint = { strong: false /* string */ };
-    return {
-      ...resolve(expr, hint),
-      element,
-      children: element.children.map((child) => analyse(child)),
-    };
-  }
-
-  switch (tag.head) {
-    case "#if": {
-      const expr = parse(tag.params!);
-      const hint: TypeHint = { strong: false /* boolean */ };
-      return {
-        operator: Operator.IF,
-        operands: [resolve(expr, hint)],
-        value: null,
-        element,
-        children: element.children.map((child) => analyse(child)),
-      };
-    }
-
-    case "#each": {
-      const expr = parse(tag.params!);
-
-      if (expr.operator !== Operator.IN) {
-        throw new Error("#each requires 'in' expression");
-      }
-
-      const [declaration, collection] = expr.operands;
-
-      if (declaration.operator !== null) {
-        throw new Error("#each declaration must be a plain name");
-      }
-
-      const hint: TypeHint = { strong: true /* collection */ };
-      return {
-        operator: Operator.EACH,
-        operands: [
-          // operands[0]: scoped variable declaration (leaf)
-          { operator: null, operands: [], value: declaration.value,
-            element: null, children: [] },
-          // operands[1]: collection expression, typed
-          resolve(collection, hint),
-        ],
-        value: null,
-        element,
-        // Children analysed with scope — declaration.value is in scope
-        children: element.children.map((child) => analyse(child)),
-      };
-    }
-
-    default:
-      throw new Error(`Unsupported keyword: ${tag.head}`);
-  }
+interface FunctionRegistry {
+  lookup(name: string): TypeHint[] | null; // returns [PN, ..., P1, Return] or null
 }
 ```
 
-## resolve(expr: Expression, hint: TypeHint): TypedElement
+`resolve(expr)` handles three cases:
+- **Leaf**: wrap as-is.
+- **APPLY**: delegate to `resolveApply`, which walks the left spine of the APPLY chain.
+- **Other operators**: recurse into operands. DOT validates that its right operand is a leaf.
 
-Recursively converts Expression → TypedElement, applying type hints.
+`resolveApply(expr)` manages the function signature stack:
+- **Base case** (left is a leaf): look up the function name, pop return type, pop parameter hint.
+- **Recursive case** (left is another APPLY): recurse to get the remainder stack.
+- Each APPLY node stores the popped parameter hint as `rule`. The return type threads unchanged through all recursive calls and is set on the outermost node by `resolve`.
+
+Error conditions:
+- Unknown function name (lookup returns null).
+- Left operand is neither a leaf nor another APPLY.
+- Stack exhausted at an APPLY node (too many arguments).
+- Remaining stack after the outermost APPLY is silently discarded (supports default/optional parameters).
+
+## Pass 2: Type hinting (`analyse.ts` — not yet implemented)
+
+Walks the `TypedElement` tree top-down, propagating type hints to leaves and registering variable bindings. The tree is already built, so every operator has access to its full subtree.
+
+### TypeHint
 
 ```ts
-function resolve(expr: Expression, hint: TypeHint): TypedElement {
-  if (expr.operator === null) {
-    // Leaf: register variable with hint
-    return {
-      operator: null,
-      operands: [],
-      value: expr.value,
-      element: null,
-      children: [],
-    };
-  }
+interface TypeHint {
+  strong: boolean;
+  type: BaseType;
+}
 
-  const operator = mapOperator(expr);
-  const childHints = resolveHints(operator, hint);
+type BaseType =
+  | { kind: "string" }
+  | { kind: "boolean" }
+  | { kind: "number"; integer?: boolean }
+  | { kind: "collection"; item?: TypeHint }
+  | { kind: "structure"; properties: Map<string, TypeHint> };
+```
 
-  return {
-    operator,
-    operands: expr.operands.map((operand, i) =>
-      resolve(operand, childHints[i]),
-    ),
-    value: null,
-    element: null,
-    children: [],
-  };
+Boolean and string hints are always weak. Collection, structure, and number hints are strong.
+
+### resolveHint
+
+`resolveHint(node, hint, refs)` walks the tree top-down. At each node, it derives child hints from the operator and parent hint, then recurses. The tree is already built (pass 1), so operators that need subtree information can read it directly:
+
+- **DOT**: reads `operands[1].value` to construct a structure property hint for the left operand.
+- **APPLY**: reads `node.rule` as the hint for the right operand. Uses `node.returnType` (if set) as an assertion against the parent hint.
+- **Other operators**: derive hints from operator semantics (see table below).
+
+At a leaf, `bindVariable` registers or asserts against the reference map.
+
+### Operator hint rules
+
+| Operator | Operand hints | Returns |
+|----------|--------------|---------|
+| `EQ`, `NEQ` | weak(parent), weak(parent) | weak boolean |
+| `NOT` | weak boolean | weak boolean |
+| `NEG` | strong number | strong number |
+| `AND`, `OR` | weak boolean, weak boolean | weak boolean |
+| `ADD` | parent, parent | parent |
+| `SUB` | strong number, strong number | strong number |
+| `MUL` | strong integer, parent | parent |
+| `DIV` | strong number, strong number | strong decimal |
+| `LT`, `LTE`, `GT`, `GTE` | strong number, strong number | weak boolean |
+| `IN` | weak(parent), strong collection(parent) | weak boolean |
+| `DOT` | strong structure({RHS.value: parent}), parent | parent |
+| `APPLY` | (left: recurse), rule | returnType |
+
+### Reference map and binding
+
+```ts
+type ReferenceMap = Map<string, TypeBinding>;
+
+interface TypeBinding {
+  strong: boolean;
+  type: BaseType;
 }
 ```
 
-### Supporting functions (TBD)
+When a leaf is visited with a hint:
 
-- `mapOperator(expr: Expression): Operator` — maps expression operator string to Operator enum, using operand count to distinguish SUB/NEG.
-- `resolveHints(operator: Operator, parentHint: TypeHint): TypeHint[]` — derives per-operand type hints from operator rules and parent context.
-- `TypeHint` — strong/weak flag plus base type (TBD).
+| Hint | Binding | Action |
+|------|---------|--------|
+| Strong | Strong | Assert compatibility, error if inconsistent |
+| Strong | Weak | Strengthen binding |
+| Weak | Strong | No-op |
+| Weak | Weak | Add hints |
+
+Type compatibility (rows can be used as columns):
+
+| | Collection | Structure | Number | Boolean | String |
+|---|---|---|---|---|---|
+| Collection | yes | | | yes | yes |
+| Structure | | yes | | yes | yes |
+| Number | | | yes | yes | yes |
+| Boolean | | | | yes | yes |
+| String | | | | yes | yes |
+
+## Element-level orchestration (`analyse.ts` — not yet implemented)
+
+`analyse(element, refs)` wraps both passes:
+
+1. Parse the tag content into an `Expression`.
+2. Pass 1: `resolver.resolve(expr)` → `TypedElement` with function rules.
+3. Pass 2: `resolveHint(typedElement, contextHint, refs)` → bindings registered.
+4. Recurse into `element.children`.
+
+Element-specific behaviour:
+- **Simple element**: context hint is weak string.
+- **`#if`**: context hint is weak boolean.
+- **`#each item in collection`**: context hint is strong collection. Validates the `IN` node structure. Creates a scoped reference map for children, binding the declaration variable to the collection's item type.
+
+## Next steps
+
+1. **`BaseType` on `TypeHint`**: currently `TypeHint` has only `strong: boolean`. Adding the `type` discriminated union is prerequisite for pass 2.
+2. **`resolveHint`**: implement the top-down hint propagation walk, using the operator hint table.
+3. **`bindVariable` and `assertCompatible`**: implement the reference map with the 4-case binding table and compatibility checks.
+4. **`analyse`**: element-level orchestration, including `#each` scoping.
+5. **Function registry**: define built-in functions and their signatures.
+6. **Hint merging**: when weak hint meets weak binding, merge structure property maps and collection item types rather than replacing.

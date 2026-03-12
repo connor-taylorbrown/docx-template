@@ -113,7 +113,7 @@ It is inconvenient not to allow complex conditions and expressions for inline ca
   - **Binary** (listed by precedence, tightest-binding first):
     - `a.b`: `T, V => V`
     - `a * b`: `number, T => T, given T not boolean`
-    - `a / b`: `number, number => number`
+    - `a / b`: `number, number => decimal`
     - `a + b`: `T, T => T, given T not boolean`
     - `a - b`: `number, number => number`
     - `a < b`: `number, number => boolean`
@@ -156,3 +156,90 @@ We may use the *shunting yard algorithm* to iteratively build a syntax tree. Giv
 - We pop from the operator stack before pushing a lower-precedence operator as usual.
 - When popping from the operator stack, pop the required number of values (two, or one if flagged) from the output stack, then push a new expression to the output stack.
 - The output stack is of type `Expression[]`. References and literals should be wrapped in this type, with no operator.
+
+#### Hinting, binding, and type assertions
+A *type hint* is an expectation. A *type binding* is the actual type of the expression. Inconsistency between *strong* type hints and type bindings is an error condition. That being said, weak type hints have their value, allowing the analyser to make useful, but overrideable suggestions.
+
+The source of truth for bindings is the *reference map.* Each key is a variable name, either used within or available to the scope of the expression. Expressions may not declare variables, so the distinction between scoped and global variables can be ignored in this analysis context.
+
+The *first binding* of a variable happens when the name is not found in the map. This is the base case of static analysis: on a leaf node, try to map the variable to a binding. If successful, run type assertions, which may modify the hint. Finally, apply the hint. The implication of this is bindings, like hints, can be weak. This leads to four general assertion conditions:
+|Hint|Binding|Result|
+|----|-------|------|
+|**Strong**|**Strong**|Proper assertion, error possible|
+|**Strong**|Weak|Strengthen binding|
+|Weak|**Strong**|Add consistent hints to binding|
+|Weak|Weak|Add hints to binding|
+
+Type assertions are consistency checks, not equality checks. Their purpose is to ensure proper usage of a reference, where the expression and its context encapsulate the usage, and specify the hint. There are a few important categories of usage:
+|Can use &darr; as &rarr;|Collection|Structure|Number|Boolean|String|
+|------------------------|----------|---------|------|-------|------|
+|Collection|Yes|No|No|Yes|Yes
+|Structure|No|Yes|No|Yes|Yes
+|Number|No|No|Yes|Yes|Yes
+|Boolean|No|No|No|Yes|Yes
+|String|No|No|No|Yes|Yes
+
+Any reference can be used as a boolean or a string, so such type hints are *weak.* Conversely, booleans cannot be iterated on, destructured, or used in arithmetic. A weak first binding will therefore be overridden by such usages, while that first *usage* will continue to work, due to truthy and falsy interpretation.
+
+There are as many types of collection as there are types of item, and as many structural patterns as there are property references. Propagating these patterns is a powerful feature of the hinting system. At a `DOT` expression, we generate a strong type hint that the left operand has a property with the name of the right operand. Naturally, this constrains the right operand to be a leaf node. Were static analysis disabled, it would be reasonable to interpret the right operand as a string at runtime, and thereby support dynamic property references.
+
+There are two types of number: integer and decimal. It is possible to use an integer in decimal contexts, but not vice versa. The case of `MUL` is quite complex in this regard. If the right-hand side is numeric, then the left-hand side can be any number. If it is non-numeric, however, then the left-hand side must be an integer. This is a *type assertion* rather than a hint, as enforcement requires knowledge of the binding.
+- **Decision:** `TypedReference` encapsulates hint generation and special assertions in separate methods. These methods are called respectively before and after resolution of the subexpression.
+
+Function invocations have a rather complex dependency on left-to-right evaluation, wherein the leftmost leaf specifies the function name, and therefore the binding. The binding may contain arbitrarily many types. Treated as a stack, the top type specifies the return type, while subsequent types serve as parameter hints.
+- **Decision:** To encapsulate hint generation on `TypedReference`, while supporting reference map-driven behaviour, *rule resolution* is the tree-building step. This in turn encapsulates propagation of parameter type hint rules.
+
+**Example hinting rules**
+```ts
+// Given function parameter `hint`:
+[left, right] = this.operands;
+switch (this.operator) {
+    case Operator.EQ:
+        weakIdentity = hint();
+        return {
+            strong: false,
+            hint: [weakIdentity, weakIdentity],
+            returns: primitiveHint("Boolean")
+        }
+
+    case Operator.IF:
+        return {
+            strong: false,
+            hint: [primitiveHint("Boolean")],
+            returns: primitiveHint("Boolean")
+        }
+
+    case Operator.SUB:
+        return {
+            strong: true,
+            hint: [primitiveHint("Number"), primitiveHint("Number")],
+            returns: primitiveHint("Number")
+        }
+
+    case Operator.ADD:
+        return {
+            strong: true,
+            hint: [hint, hint],
+            returns: hint
+        }
+
+    case Operator.DOT:
+        if (right.operator !== null) {
+            throw new Error();
+        }
+
+        return {
+            strong: true,
+            hint: [propertyHint(right.value, hint), hint],
+            returns: hint
+        }
+
+    case Operator.APPLY:
+        [returns, ...hints] = functionHints(hint);
+        return {
+            strong: true,
+            hint: hints,
+            returns
+        }
+}
+```

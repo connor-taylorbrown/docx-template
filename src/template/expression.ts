@@ -52,11 +52,9 @@ const PRECEDENCE: ReadonlyMap<Operator, number> = new Map([
   [Operator.APPLY, 10],
 ]);
 
-// Matches: symbol operators, word operators, parentheses, dot-separated
-// references, and plain values. Dot is handled by splitting references after
-// tokenization to keep the regex simple.
+// Matches: symbol operators, word operators, parentheses, and plain values.
 const TOKEN_PATTERN =
-  /!=|<=|>=|[+\-*/<>=()]|(?:and|or|not|in)(?=\s|[()]|$)|[^\s+\-*/<>=()!]+/g;
+  /!=|<=|>=|[.+\-*/<>=()]|(?:and|or|not|in)(?=\s|[()]|$)|[^\s.+\-*/<>=()!]+/g;
 
 interface OpEntry {
   operator: Operator | typeof PAREN;
@@ -74,16 +72,6 @@ function popOperator(output: Expression[], ops: OpEntry[]): void {
     const left = output.pop()!;
     output.push({ operator, operands: [left, right], value: null });
   }
-}
-
-function expandDots(token: string): Expression {
-  const parts = token.split(".");
-  let expr: Expression = { operator: null, operands: [], value: parts[0] };
-  for (let i = 1; i < parts.length; i++) {
-    const right: Expression = { operator: null, operands: [], value: parts[i] };
-    expr = { operator: Operator.DOT, operands: [expr, right], value: null };
-  }
-  return expr;
 }
 
 function shouldPop(ops: OpEntry[], precedence: number): boolean {
@@ -153,7 +141,7 @@ export function parse(input: string): Expression {
       ops.push({ operator: Operator.APPLY, unary: false, precedence: applyPrecedence });
     }
 
-    output.push(expandDots(token));
+    output.push({ operator: null, operands: [], value: token });
     expectOperand = false;
   }
 
