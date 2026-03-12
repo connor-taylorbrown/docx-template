@@ -113,12 +113,58 @@ Scoping behaviour:
 | `DOT` | strong structure({RHS.value: parent}), parent | parent |
 | `APPLY` | (left: weak string), rule | returnType |
 
-### Binding
+### Binding (`reference-map.ts`)
 
 When `bind` encounters an existing binding:
 - **Strong hint + weak binding**: strengthen (replace type).
 - **Weak hint + strong binding**: no-op.
-- All other cases: first binding wins.
+- **Strong hint + strong binding**: assert compatibility, then merge.
+- **Weak hint + weak binding**: merge.
+
+#### Compatibility (not yet enforced)
+
+Strong/strong conflicts between incompatible kinds should throw:
+
+| | Collection | Structure | Number | Boolean | String |
+|---|---|---|---|---|---|
+| Collection | yes | | | yes | yes |
+| Structure | | yes | | yes | yes |
+| Number | | | yes | yes | yes |
+| Boolean | | | | yes | yes |
+| String | | | | yes | yes |
+
+Boolean and string hints are always weak, so they never reach a strong/strong assertion. A strong/strong conflict means e.g. collection vs number, structure vs collection — a real type error.
+
+#### Merging (not yet implemented)
+
+When the hint and binding are compatible, `bind` should merge rather than replace:
+
+- **Structure + structure**: union the property maps. If both have the same property, merge the property hints recursively.
+- **Collection + collection**: merge item types (if both present).
+- **Number + number**: `integer` is stricter than unspecified. If one side says integer and the other doesn't, keep integer.
+- **Same kind, no substructure** (boolean, string): no-op.
+
+```ts
+bind(name, hint):
+  existing = lookup(name)
+  if !existing → set and return
+
+  // Assert
+  if hint.strong && existing.strong:
+    assertCompatible(hint.type, existing.type)  // throws on kind mismatch
+
+  // Strengthen
+  if hint.strong && !existing.strong:
+    existing.strong = true
+    existing.type = hint.type
+    return
+
+  // Merge (strong+strong after assertion, or weak+weak)
+  if existing.strong || hint.strong:
+    mergeInto(existing.type, hint.type)          // accumulates properties, items
+```
+
+Merging is where `a.b` followed by `a.c` produces `structure { b, c }`. Without it, the second DOT hint replaces the first (on strengthen) or is silently dropped (weak+strong no-op). Neither is correct.
 
 ## Element-level orchestration (`analyse.ts` — implemented)
 
