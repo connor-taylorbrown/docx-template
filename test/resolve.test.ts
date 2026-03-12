@@ -27,6 +27,31 @@ describe("Resolver", () => {
       const r = new Resolver(emptyRegistry());
       expect(r.resolve(parse("x"))).toEqual(leaf("x"));
     });
+
+    it("integer literal sets returnType", () => {
+      const r = new Resolver(emptyRegistry());
+      const result = r.resolve(parse("42"));
+      expect(result.returnType).toEqual({
+        strong: true,
+        type: { kind: "number", integer: true },
+      });
+      expect(result.value).toBe("42");
+    });
+
+    it("decimal literal sets returnType", () => {
+      const r = new Resolver(emptyRegistry());
+      const result = r.resolve(parse("3.14"));
+      expect(result.returnType).toEqual({
+        strong: true,
+        type: { kind: "number" },
+      });
+      expect(result.value).toBe("3.14");
+    });
+
+    it("non-literal has null returnType", () => {
+      const r = new Resolver(emptyRegistry());
+      expect(r.resolve(parse("x")).returnType).toBeNull();
+    });
   });
 
   describe("unary operators", () => {

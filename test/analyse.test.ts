@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ReferenceMap, TypeHint, resolveHint, analyse } from "../src/template/analyse.js";
-import { Resolver, TypedElement } from "../src/template/resolve.js";
+import { Resolver, TypedElement, FunctionRegistry } from "../src/template/resolve.js";
 import { parse } from "../src/template/expression.js";
 import type { Element } from "../src/template/parser.js";
 import type { Tag } from "../src/template/tag.js";
@@ -8,8 +8,19 @@ import type { DocumentNode } from "../src/template/document-node.js";
 
 const str: TypeHint = { strong: false, type: { kind: "string" } };
 const num: TypeHint = { strong: true, type: { kind: "number" } };
+const coll: TypeHint = { strong: true, type: { kind: "collection" } };
 
 const resolver = new Resolver({ lookup: () => null });
+
+function fakeRegistry(entries: Record<string, TypeHint[]>): FunctionRegistry {
+  const map = new Map(Object.entries(entries));
+  return {
+    lookup(name) {
+      const sig = map.get(name);
+      return sig ? [...sig] : null;
+    },
+  };
+}
 
 function resolve(expr: string): TypedElement {
   return resolver.resolve(parse(expr));
@@ -57,11 +68,50 @@ describe("resolveHint", () => {
       expect(refs.get("b")!.type.kind).toBe("number");
     });
 
-    it("MUL left integer, right from parent", () => {
+    it("MUL left integer when right is non-numeric", () => {
       const refs = ReferenceMap.create();
       resolveHint(resolve("a * b"), str, refs);
       expect(refs.get("a")!.type).toEqual({ kind: "number", integer: true });
       expect(refs.get("b")!.type.kind).toBe("string");
+    });
+
+    it("MUL left number when right is pre-bound numeric", () => {
+      const refs = ReferenceMap.create();
+      refs.bind("b", num);
+      resolveHint(resolve("a * b"), str, refs);
+      expect(refs.get("a")!.strong).toBe(true);
+      expect(refs.get("a")!.type.kind).toBe("number");
+      expect((refs.get("a")!.type as { kind: "number"; integer?: boolean }).integer).toBeUndefined();
+    });
+
+    it("MUL left number when right is complex numeric (SUB)", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("a * (b - c)"), str, refs);
+      expect(refs.get("a")!.strong).toBe(true);
+      expect(refs.get("a")!.type.kind).toBe("number");
+      expect((refs.get("a")!.type as { kind: "number"; integer?: boolean }).integer).toBeUndefined();
+    });
+
+    it("MUL left integer when right is complex non-numeric (ADD with string)", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("a * (b + c)"), str, refs);
+      expect(refs.get("a")!.type).toEqual({ kind: "number", integer: true });
+    });
+
+    it("MUL left number when parent hint is numeric", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("a * b"), num, refs);
+      expect(refs.get("a")!.type.kind).toBe("number");
+      expect((refs.get("a")!.type as { kind: "number"; integer?: boolean }).integer).toBeUndefined();
+      expect(refs.get("b")!.type.kind).toBe("number");
+    });
+
+    it("MUL left number when right is literal", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("a * 3"), str, refs);
+      expect(refs.get("a")!.strong).toBe(true);
+      expect(refs.get("a")!.type.kind).toBe("number");
+      expect((refs.get("a")!.type as { kind: "number"; integer?: boolean }).integer).toBeUndefined();
     });
 
     it("DIV forces number", () => {
@@ -136,6 +186,59 @@ describe("resolveHint", () => {
     });
   });
 
+  describe("literals", () => {
+    it("integer literal does not create a binding", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("1"), str, refs);
+      expect(refs.get("1")).toBeUndefined();
+    });
+
+    it("decimal literal does not create a binding", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("3.14"), str, refs);
+      expect(refs.get("3")).toBeUndefined();
+      expect(refs.get("14")).toBeUndefined();
+    });
+
+    it("zero is a valid literal", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("0"), str, refs);
+      expect(refs.get("0")).toBeUndefined();
+    });
+
+    it("a + 1 binds only a", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("a + 1"), str, refs);
+      expect(refs.get("a")).toBeDefined();
+      expect(refs.get("1")).toBeUndefined();
+    });
+
+    it("a - 1 binds a as number, not 1", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("a - 1"), str, refs);
+      expect(refs.get("a")!.type.kind).toBe("number");
+      expect(refs.get("1")).toBeUndefined();
+    });
+
+    it("-1 creates no bindings", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("-1"), str, refs);
+      expect(refs.get("1")).toBeUndefined();
+    });
+
+    it("leading zeros are not literals", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("00"), str, refs);
+      expect(refs.get("00")).toBeDefined();
+    });
+
+    it("scientific notation is not a literal", () => {
+      const refs = ReferenceMap.create();
+      resolveHint(resolve("1e5"), str, refs);
+      expect(refs.get("1e5")).toBeDefined();
+    });
+  });
+
   describe("DOT", () => {
     it("gives structure hint to left operand", () => {
       const refs = ReferenceMap.create();
@@ -144,6 +247,7 @@ describe("resolveHint", () => {
       expect(refs.get("a")!.type.kind).toBe("structure");
       const props = (refs.get("a")!.type as { kind: "structure"; properties: Map<string, TypeHint> }).properties;
       expect(props.get("b")).toEqual(str);
+      expect(refs.get("b")).toBeUndefined();
     });
 
     it("nested DOT chains structure hints", () => {
@@ -155,13 +259,17 @@ describe("resolveHint", () => {
       expect(bHint.type.kind).toBe("structure");
       const bProps = (bHint.type as { kind: "structure"; properties: Map<string, TypeHint> }).properties;
       expect(bProps.get("c")).toEqual(str);
+      expect(refs.get("b")).toBeUndefined();
+      expect(refs.get("c")).toBeUndefined();
     });
 
     it("DOT in arithmetic context", () => {
       const refs = ReferenceMap.create();
-      resolveHint(resolve("a.b + 1"), str, refs);
+      resolveHint(resolve("a.b + x"), str, refs);
       const props = (refs.get("a")!.type as { kind: "structure"; properties: Map<string, TypeHint> }).properties;
       expect(props.get("b")).toEqual(str);
+      expect(refs.get("b")).toBeUndefined();
+      expect(refs.get("x")).toBeDefined();
     });
 
     it("multiple DOT on same variable merges properties", () => {
@@ -173,6 +281,145 @@ describe("resolveHint", () => {
       expect(props.has("c")).toBe(true);
       expect(props.get("b")).toEqual(str);
       expect(props.get("c")).toEqual(num);
+    });
+  });
+
+  function resolveWith(reg: FunctionRegistry, expr: string): TypedElement {
+    return new Resolver(reg).resolve(parse(expr));
+  }
+
+  describe("APPLY return type assertion", () => {
+    const fnNumNum = fakeRegistry({ fn: [num, num] }); // num -> num
+
+    it("matching strong return and strong parent does not throw", () => {
+      const refs = ReferenceMap.create();
+      expect(() =>
+        resolveHint(resolveWith(fnNumNum, "fn x"), num, refs),
+      ).not.toThrow();
+    });
+
+    it("weak return with strong parent does not throw", () => {
+      const reg = fakeRegistry({ fn: [num, str] }); // num -> weak string
+      const refs = ReferenceMap.create();
+      expect(() =>
+        resolveHint(resolveWith(reg, "fn x"), coll, refs),
+      ).not.toThrow();
+    });
+
+    it("strong return with weak parent does not throw", () => {
+      const refs = ReferenceMap.create();
+      expect(() =>
+        resolveHint(resolveWith(fnNumNum, "fn x"), str, refs),
+      ).not.toThrow();
+    });
+
+    it("strong return conflicting with strong parent throws", () => {
+      const refs = ReferenceMap.create();
+      expect(() =>
+        resolveHint(resolveWith(fnNumNum, "fn x"), coll, refs),
+      ).toThrow();
+    });
+
+    it("inner APPLY does not assert (returnType is null)", () => {
+      const reg = fakeRegistry({ fn: [num, num, num] }); // num, num -> num
+      const refs = ReferenceMap.create();
+      // fn a b — outermost has returnType, inner does not
+      expect(() =>
+        resolveHint(resolveWith(reg, "fn a b"), num, refs),
+      ).not.toThrow();
+    });
+
+    it("in #if context (weak parent) does not throw", () => {
+      const refs = ReferenceMap.create();
+      const fnResolver = new Resolver(fnNumNum);
+      analyse(
+        el(tag("#if", "fn x"), [el(tag("y"))]),
+        refs,
+        fnResolver,
+      );
+      // weak boolean parent + strong number return → no assertion
+      expect(refs.get("x")).toBeDefined();
+    });
+
+    it("in #each collection context (strong parent) throws", () => {
+      const refs = ReferenceMap.create();
+      const fnResolver = new Resolver(fnNumNum);
+      expect(() =>
+        analyse(
+          el(tag("#each", "item in fn x"), [el(tag("item"))]),
+          refs,
+          fnResolver,
+        ),
+      ).toThrow();
+    });
+  });
+
+  describe("APPLY parameter hints", () => {
+    it("function name not bound", () => {
+      const reg = fakeRegistry({ fn: [num, num] });
+      const refs = ReferenceMap.create();
+      resolveHint(resolveWith(reg, "fn x"), str, refs);
+      expect(refs.get("fn")).toBeUndefined();
+      expect(refs.get("x")).toBeDefined();
+    });
+
+    it("single arg gets rule hint", () => {
+      const reg = fakeRegistry({ fn: [num, num] });
+      const refs = ReferenceMap.create();
+      resolveHint(resolveWith(reg, "fn x"), str, refs);
+      expect(refs.get("x")!.strong).toBe(true);
+      expect(refs.get("x")!.type.kind).toBe("number");
+    });
+
+    it("multi-arg: each gets its rule, name not bound", () => {
+      // [str, num, num] → stack pops: Ret=num, P1=num, P2=str
+      // fn a b → a gets P1=num, b gets P2=str
+      const reg = fakeRegistry({ fn: [str, num, num] });
+      const refs = ReferenceMap.create();
+      resolveHint(resolveWith(reg, "fn a b"), str, refs);
+      expect(refs.get("fn")).toBeUndefined();
+      expect(refs.get("a")!.strong).toBe(true);
+      expect(refs.get("a")!.type.kind).toBe("number");
+      expect(refs.get("b")!.strong).toBe(false);
+      expect(refs.get("b")!.type.kind).toBe("string");
+    });
+
+    it("complex arg propagates rule", () => {
+      const reg = fakeRegistry({ fn: [num, num] });
+      const refs = ReferenceMap.create();
+      resolveHint(resolveWith(reg, "fn (a + b)"), str, refs);
+      expect(refs.get("a")!.strong).toBe(true);
+      expect(refs.get("a")!.type.kind).toBe("number");
+      expect(refs.get("b")!.strong).toBe(true);
+      expect(refs.get("b")!.type.kind).toBe("number");
+    });
+
+    it("rule conflicts with existing strong binding", () => {
+      const reg = fakeRegistry({ fn: [num, num] });
+      const refs = ReferenceMap.create();
+      refs.bind("x", coll);
+      expect(() =>
+        resolveHint(resolveWith(reg, "fn x"), str, refs),
+      ).toThrow();
+    });
+
+    it("weak rule does not override strong binding", () => {
+      const reg = fakeRegistry({ fn: [str, num] }); // str param, num return
+      const refs = ReferenceMap.create();
+      refs.bind("x", num);
+      resolveHint(resolveWith(reg, "fn x"), str, refs);
+      expect(refs.get("x")!.strong).toBe(true);
+      expect(refs.get("x")!.type.kind).toBe("number");
+    });
+
+    it("parenthesised call in DOT: fn not bound, property not bound", () => {
+      const ret: TypeHint = { strong: false, type: { kind: "string" } };
+      const reg = fakeRegistry({ fn: [num, ret] }); // num -> weak string
+      const refs = ReferenceMap.create();
+      resolveHint(resolveWith(reg, "(fn a).b"), str, refs);
+      expect(refs.get("fn")).toBeUndefined();
+      expect(refs.get("b")).toBeUndefined();
+      expect(refs.get("a")).toBeDefined();
     });
   });
 });

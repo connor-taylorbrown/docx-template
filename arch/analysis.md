@@ -19,9 +19,9 @@ interface TypedElement {
 ```
 
 Node kinds:
-- **Leaf**: `operator: null`, `value` is a variable name or literal.
+- **Leaf**: `operator: null`, `value` is a variable name or literal. `returnType` is set for numeric literals (mapped from `Expression.literal` via `LITERAL_TYPES` in resolve.ts); null for variables.
 - **Expression node**: `operator` is ADD, DOT, etc. `operands` are sub-expressions.
-- **APPLY node**: `rule` is the parameter hint for its right operand. Only the outermost APPLY in a function call chain has `returnType` set.
+- **APPLY node**: `rule` is the parameter hint for its right operand. Only the outermost APPLY in a function call chain has `returnType` set (to the function's return type from the registry).
 
 ### Resolver
 
@@ -94,9 +94,16 @@ Scoping behaviour:
 
 ### resolveHint (`analyse.ts` — implemented)
 
-`resolveHint(node, hint, refs)` walks the tree top-down. At each node, `operatorHints` derives child hints from the operator and parent hint. At a leaf, `refs.bind(name, hint)` registers the binding.
+`resolveHint(node, hint, refs): TypeHint` walks the tree top-down, returning the resolved type of the node. It handles three categories of node:
 
-### Operator hint rules
+**Leaves:** If the node has a `returnType` (literal), return it without binding. Otherwise, `refs.bind(name, hint)` and return the binding's actual type.
+
+**Special-cased operators** (handled directly in `resolveHint`, not via `operatorHints`):
+- **MUL**: resolve right first; if its return type is numeric, hint left as strong number, otherwise strong integer. Returns parent hint.
+- **DOT**: resolve left only, with a structure hint containing the property name. The right operand (property name) is never recursed into — it is a label, not an expression. Returns parent hint.
+- **APPLY**: resolve right with `node.rule` (parameter hint). For the left operand: recurse only if it is an operator node (inner APPLY in a multi-arg call); skip if it is a leaf (function name — not a variable). Returns `node.returnType ?? hint`.
+
+**Uniform operators** (handled by `operatorHints`, which returns `[childHints[], returnHint]`):
 
 | Operator | Operand hints | Returns |
 |----------|--------------|---------|
@@ -106,12 +113,11 @@ Scoping behaviour:
 | `AND`, `OR` | weak boolean, weak boolean | weak boolean |
 | `ADD` | parent, parent | parent |
 | `SUB` | strong number, strong number | strong number |
-| `MUL` | strong integer, parent | parent |
-| `DIV` | strong number, strong number | strong decimal |
+| `DIV` | strong number, strong number | strong number |
 | `LT`, `LTE`, `GT`, `GTE` | strong number, strong number | weak boolean |
 | `IN` | weak(parent), strong collection(parent) | weak boolean |
-| `DOT` | strong structure({RHS.value: parent}), parent | parent |
-| `APPLY` | (left: weak string), rule | returnType |
+
+**Return type assertion:** Before any operator handling, if `node.returnType` is set and both it and `hint` are strong, `assertCompatible` is called. This catches type errors like using a number-returning function in a collection context. Only the outermost APPLY has `returnType` set (from pass 1); inner APPLYs and other operators have `null`.
 
 ### Binding (`reference-map.ts`)
 
@@ -190,8 +196,22 @@ Element-specific behaviour:
 
 This ordering is deliberate: the collection's item type is not known until after children are analysed, so the collection expression is hinted last. Expression collections (e.g. `a + b`) require no special handling — ADD propagates the collection hint to both operands.
 
+### Literal detection (`expression.ts`, `resolve.ts` — implemented)
+
+Numeric literals are detected at parse time. The `Expression` interface carries a `literal: Literal | null` field, where `Literal` is an enum (`INTEGER`, `DECIMAL`) defined in `operator.ts`. The `classifyLiteral` function in `expression.ts` tests tokens against `NUMERIC_LITERAL` and returns the appropriate variant. Decimal literals like `3.14` are tokenized as a single token (the decimal pattern precedes `.` in `TOKEN_PATTERN`), preventing them from being split into `DOT(3, 14)`.
+
+`resolve.ts` maps `Literal` → `TypeHint` via `LITERAL_TYPES` and sets `returnType` on the leaf `TypedElement`. In `resolveHint`, a leaf with `returnType !== null` is a literal — it returns its intrinsic type without calling `refs.bind()`.
+
+The regex rejects leading zeros (except bare `0`), scientific notation (`1e5`), and non-numeric tokens. Negative literals are handled by the `NEG` operator — `-1` parses as `NEG(1)`.
+
+### Risks mitigated
+
+- **DOT property names were bound as variables.** `a.b` previously recursed into the right operand, calling `refs.bind("b", hint)`. This polluted the reference map with property names. Now DOT only recurses into its left operand; the right is read as a label.
+- **Function names were bound as variables.** `fn x` previously recursed into the left operand, calling `refs.bind("fn", weakString)`. Now APPLY skips leaf left operands (function names) and only recurses into operator left operands (inner APPLY nodes in multi-arg calls).
+- **Decimal literals were parsed as DOT expressions.** `3.14` tokenized as `3 . 14`, producing `DOT(leaf("3"), leaf("14"))`. Now `TOKEN_PATTERN` matches decimal literals before `.`, producing a single leaf with `literal: Literal.DECIMAL`.
+- **MUL over-constrained the left operand.** `a * b` always hinted `a` as integer, even when `b` was numeric (where any number is valid). Now the right operand is resolved first and its type inspected.
+- **APPLY return types were not asserted.** A number-returning function used in a collection context (e.g. `#each item in fn x`) silently passed. Now `assertCompatible` is called when both the return type and parent hint are strong.
+
 ## Next steps
 
-1. **APPLY return type assertions**: `node.returnType` from pass 1 is available but not yet used in `resolveHint`. It should be asserted against the parent hint.
-2. **Function registry**: define built-in functions and their signatures.
-3. **Literal detection**: leaf nodes that are numeric literals (e.g. `1`, `3.14`) should not be bound as variables. `resolveHint` should detect and skip them, or bind them with a fixed numeric type.
+1. **Function registry**: define built-in functions and their signatures.

@@ -1,12 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { Expression, Operator, parse } from "../src/template/expression.js";
+import { Literal } from "../src/template/operator.js";
 
 function leaf(value: string): Expression {
-  return { operator: null, operands: [], value };
+  return { operator: null, operands: [], value, literal: null };
+}
+
+function literal(value: string, kind: Literal): Expression {
+  return { operator: null, operands: [], value, literal: kind };
 }
 
 function unary(operator: Operator, operand: Expression): Expression {
-  return { operator, operands: [operand], value: null };
+  return { operator, operands: [operand], value: null, literal: null };
 }
 
 function binary(
@@ -14,7 +19,7 @@ function binary(
   left: Expression,
   right: Expression,
 ): Expression {
-  return { operator, operands: [left, right], value: null };
+  return { operator, operands: [left, right], value: null, literal: null };
 }
 
 describe("parse", () => {
@@ -23,8 +28,20 @@ describe("parse", () => {
       expect(parse("name")).toEqual(leaf("name"));
     });
 
-    it("numeric literal", () => {
-      expect(parse("42")).toEqual(leaf("42"));
+    it("integer literal", () => {
+      expect(parse("42")).toEqual(literal("42", Literal.INTEGER));
+    });
+
+    it("decimal literal", () => {
+      expect(parse("3.14")).toEqual(literal("3.14", Literal.DECIMAL));
+    });
+
+    it("zero literal", () => {
+      expect(parse("0")).toEqual(literal("0", Literal.INTEGER));
+    });
+
+    it("decimal with zero prefix", () => {
+      expect(parse("0.5")).toEqual(literal("0.5", Literal.DECIMAL));
     });
 
     it("trims whitespace", () => {
@@ -271,6 +288,42 @@ describe("parse", () => {
 
     it("nested parentheses", () => {
       expect(parse("((a))")).toEqual(leaf("a"));
+    });
+  });
+
+  describe("decimal literals in expressions", () => {
+    it("add with decimal", () => {
+      expect(parse("a + 3.14")).toEqual(
+        binary(Operator.ADD, leaf("a"), literal("3.14", Literal.DECIMAL)),
+      );
+    });
+
+    it("mul with decimal", () => {
+      expect(parse("a * 3.14")).toEqual(
+        binary(Operator.MUL, leaf("a"), literal("3.14", Literal.DECIMAL)),
+      );
+    });
+
+    it("negated decimal", () => {
+      expect(parse("-3.14")).toEqual(
+        unary(Operator.NEG, literal("3.14", Literal.DECIMAL)),
+      );
+    });
+
+    it("decimal does not consume dot from property access", () => {
+      expect(parse("a.b + 3.14")).toEqual(
+        binary(
+          Operator.ADD,
+          binary(Operator.DOT, leaf("a"), leaf("b")),
+          literal("3.14", Literal.DECIMAL),
+        ),
+      );
+    });
+
+    it("integer in arithmetic carries literal hint", () => {
+      expect(parse("a + 1")).toEqual(
+        binary(Operator.ADD, leaf("a"), literal("1", Literal.INTEGER)),
+      );
     });
   });
 

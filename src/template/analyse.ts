@@ -3,7 +3,7 @@ import { parse } from "./expression.js";
 import type { TypeHint, TypedElement } from "./resolve.js";
 import type { Resolver } from "./resolve.js";
 import type { Element } from "./parser.js";
-import { ReferenceMap } from "./reference-map.js";
+import { ReferenceMap, assertCompatible } from "./reference-map.js";
 
 export { ReferenceMap } from "./reference-map.js";
 export { type TypeBinding } from "./reference-map.js";
@@ -13,16 +13,51 @@ export function resolveHint(
   node: TypedElement,
   hint: TypeHint,
   refs: ReferenceMap,
-): void {
+): TypeHint {
   if (node.operator === null) {
+    if (node.returnType !== null) return node.returnType;
     refs.bind(node.value!, hint);
-    return;
+    const binding = refs.get(node.value!);
+    return binding ? { strong: binding.strong, type: binding.type } : hint;
   }
 
-  const childHints = operatorHints(node, hint);
+  if (node.returnType !== null) {
+    if (hint.strong && node.returnType.strong) {
+      assertCompatible(hint.type, node.returnType.type);
+    }
+  }
+
+  if (node.operator === Operator.MUL) {
+    const [left, right] = node.operands;
+    const rightResolved = resolveHint(right, hint, refs);
+    resolveHint(left, rightResolved.type.kind === "number" ? NUM : INT, refs);
+    return hint;
+  }
+
+  if (node.operator === Operator.DOT) {
+    const [left, right] = node.operands;
+    const propName = right.value!;
+    resolveHint(left, {
+      strong: true,
+      type: { kind: "structure", properties: new Map([[propName, hint]]) },
+    }, refs);
+    return hint;
+  }
+
+  if (node.operator === Operator.APPLY) {
+    const [left, right] = node.operands;
+    if (left.operator !== null) {
+      resolveHint(left, hint, refs);
+    }
+    resolveHint(right, node.rule!, refs);
+    return node.returnType ?? hint;
+  }
+
+  const [childHints, returnHint] = operatorHints(node, hint);
   for (let i = 0; i < node.operands.length; i++) {
     resolveHint(node.operands[i], childHints[i], refs);
   }
+  return returnHint;
 }
 
 const NUM: TypeHint = { strong: true, type: { kind: "number" } };
@@ -30,65 +65,52 @@ const INT: TypeHint = { strong: true, type: { kind: "number", integer: true } };
 const BOOL: TypeHint = { strong: false, type: { kind: "boolean" } };
 const WEAK_STR: TypeHint = { strong: false, type: { kind: "string" } };
 
-function operatorHints(node: TypedElement, hint: TypeHint): TypeHint[] {
+
+function operatorHints(node: TypedElement, hint: TypeHint): [TypeHint[], TypeHint] {
   switch (node.operator) {
     case Operator.ADD:
-      return [hint, hint];
+      return [[hint, hint], hint];
 
     case Operator.SUB:
-      return [NUM, NUM];
-
-    case Operator.MUL:
-      return [INT, hint];
+      return [[NUM, NUM], NUM];
 
     case Operator.DIV:
-      return [NUM, NUM];
+      return [[NUM, NUM], NUM];
 
     case Operator.NEG:
-      return [NUM];
+      return [[NUM], NUM];
 
     case Operator.NOT:
-      return [BOOL];
+      return [[BOOL], BOOL];
 
     case Operator.AND:
     case Operator.OR:
-      return [BOOL, BOOL];
+      return [[BOOL, BOOL], BOOL];
 
     case Operator.LT:
     case Operator.LTE:
     case Operator.GT:
     case Operator.GTE:
-      return [NUM, NUM];
+      return [[NUM, NUM], BOOL];
 
     case Operator.EQ:
     case Operator.NEQ:
       return [
-        { strong: false, type: hint.type },
-        { strong: false, type: hint.type },
+        [
+          { strong: false, type: hint.type },
+          { strong: false, type: hint.type },
+        ],
+        BOOL,
       ];
 
     case Operator.IN:
       return [
-        { strong: false, type: hint.type },
-        { strong: true, type: { kind: "collection", item: hint } },
+        [
+          { strong: false, type: hint.type },
+          { strong: true, type: { kind: "collection", item: hint } },
+        ],
+        BOOL,
       ];
-
-    case Operator.DOT: {
-      const propName = node.operands[1].value!;
-      return [
-        {
-          strong: true,
-          type: {
-            kind: "structure",
-            properties: new Map([[propName, hint]]),
-          },
-        },
-        hint,
-      ];
-    }
-
-    case Operator.APPLY:
-      return [WEAK_STR, node.rule!];
 
     default:
       throw new Error(`Unsupported operator: ${node.operator}`);

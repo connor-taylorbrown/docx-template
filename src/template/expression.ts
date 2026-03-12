@@ -1,4 +1,4 @@
-import { Operator } from "./operator.js";
+import { Literal, Operator } from "./operator.js";
 
 export { Operator };
 
@@ -6,6 +6,7 @@ export interface Expression {
   operator: Operator | null;
   operands: Expression[];
   value: string | null;
+  literal: Literal | null;
 }
 
 const PAREN = "(";
@@ -52,9 +53,17 @@ const PRECEDENCE: ReadonlyMap<Operator, number> = new Map([
   [Operator.APPLY, 10],
 ]);
 
-// Matches: symbol operators, word operators, parentheses, and plain values.
+const NUMERIC_LITERAL = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
+
+function classifyLiteral(value: string): Literal | null {
+  if (!NUMERIC_LITERAL.test(value)) return null;
+  return value.includes(".") ? Literal.DECIMAL : Literal.INTEGER;
+}
+
+// Matches: decimal literals, symbol operators, word operators, parentheses, and plain values.
+// Decimal literals must precede '.' to avoid splitting "3.14" into "3", ".", "14".
 const TOKEN_PATTERN =
-  /!=|<=|>=|[.+\-*/<>=()]|(?:and|or|not|in)(?=\s|[()]|$)|[^\s.+\-*/<>=()!]+/g;
+  /(?:0|[1-9]\d*)\.\d+|!=|<=|>=|[.+\-*/<>=()]|(?:and|or|not|in)(?=\s|[()]|$)|[^\s.+\-*/<>=()!]+/g;
 
 interface OpEntry {
   operator: Operator | typeof PAREN;
@@ -66,11 +75,11 @@ function popOperator(output: Expression[], ops: OpEntry[]): void {
   const { operator, unary } = ops.pop()! as { operator: Operator; unary: boolean };
   if (unary) {
     const operand = output.pop()!;
-    output.push({ operator, operands: [operand], value: null });
+    output.push({ operator, operands: [operand], value: null, literal: null });
   } else {
     const right = output.pop()!;
     const left = output.pop()!;
-    output.push({ operator, operands: [left, right], value: null });
+    output.push({ operator, operands: [left, right], value: null, literal: null });
   }
 }
 
@@ -141,7 +150,7 @@ export function parse(input: string): Expression {
       ops.push({ operator: Operator.APPLY, unary: false, precedence: applyPrecedence });
     }
 
-    output.push({ operator: null, operands: [], value: token });
+    output.push({ operator: null, operands: [], value: token, literal: classifyLiteral(token) });
     expectOperand = false;
   }
 

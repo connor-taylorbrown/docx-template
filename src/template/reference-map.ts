@@ -1,6 +1,6 @@
 import type { BaseType, TypeHint } from "./resolve.js";
 
-function assertCompatible(a: BaseType, b: BaseType): void {
+export function assertCompatible(a: BaseType, b: BaseType): void {
   if (a.kind !== b.kind) {
     throw new Error(`Type conflict: ${a.kind} is not compatible with ${b.kind}`);
   }

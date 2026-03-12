@@ -1,3 +1,8 @@
+export enum Literal {
+  INTEGER = "integer",
+  DECIMAL = "decimal",
+}
+
 export enum Operator {
   IF = "if",
   EACH = "each",

@@ -1,4 +1,4 @@
-import { Operator } from "./operator.js";
+import { Literal, Operator } from "./operator.js";
 import type { Expression } from "./expression.js";
 
 export type BaseType =
@@ -12,6 +12,11 @@ export interface TypeHint {
   strong: boolean;
   type: BaseType;
 }
+
+const LITERAL_TYPES: Record<Literal, TypeHint> = {
+  [Literal.INTEGER]: { strong: true, type: { kind: "number", integer: true } },
+  [Literal.DECIMAL]: { strong: true, type: { kind: "number" } },
+};
 
 export interface TypedElement {
   operator: Operator | null;
@@ -32,7 +37,8 @@ export class Resolver {
     if (expr.operator === null) {
       return {
         operator: null, operands: [], value: expr.value,
-        rule: null, returnType: null,
+        rule: null,
+        returnType: expr.literal !== null ? LITERAL_TYPES[expr.literal] : null,
       };
     }
 
