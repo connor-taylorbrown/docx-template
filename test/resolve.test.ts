@@ -227,14 +227,16 @@ describe("Resolver", () => {
           {
             operator: Operator.ADD,
             operands: [
-              { operator: null, operands: [], value: "a" },
-              { operator: null, operands: [], value: "b" },
+              { operator: null, operands: [], value: "a", literal: null },
+              { operator: null, operands: [], value: "b", literal: null },
             ],
             value: null,
+            literal: null,
           },
-          { operator: null, operands: [], value: "c" },
+          { operator: null, operands: [], value: "c", literal: null },
         ],
         value: null,
+        literal: null,
       };
       expect(() => r.resolve(expr)).toThrow(
         "Left operand of function call must be a name",
