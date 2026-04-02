@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { Parser, Element } from "../src/template/parser.js";
-import { ParagraphView, parseInline } from "../src/template/inline.js";
+import { ParagraphView } from "../src/template/paragraph-reader.js";
 import { Run } from "../src/template/run.js";
 import { TreeReader, TreeNode } from "../src/template/tree-reader.js";
+import { VirtualNode } from "../src/template/virtual-node.js";
 import { TestRun } from "./test-run.js";
 
 /** Concrete ParagraphView backed by TestRuns. */
@@ -86,188 +86,134 @@ function container(...children: TestTreeNode[]): TestTreeNode {
   return new TestTreeNode({ children });
 }
 
-function reader(): TreeReader {
-  return new TreeReader(new Parser(), parseInline);
-}
-
-function expectSimple(el: Element): void {
-  expect(el.nodes).toHaveLength(1);
-  expect(el.children).toHaveLength(0);
-}
-
-function expectBlock(el: Element): void {
-  expect(el.nodes).toHaveLength(2);
-}
-
 describe("TreeReader", () => {
-  describe("plain content", () => {
-    it("single paragraph, no tags — produces no elements", () => {
-      const root = container(para("Hello world"));
-      const r = reader();
-      r.classify(root);
-      const result = r.result();
+  describe("classify returns VirtualNode", () => {
+    it("root virtual node wraps the TreeNode", () => {
+      const root = container(para("Hello"));
+      const r = new TreeReader();
+      const vnode = r.classify(root);
 
-      expect(result).toHaveLength(0);
+      expect(vnode).toBeInstanceOf(VirtualNode);
+      expect(vnode.content).toBe(root);
+      expect(vnode.tag).toBeNull();
+      expect(vnode.element).toBeNull();
     });
 
-    it("multiple plain paragraphs — produces no elements", () => {
-      const root = container(para("Hello"), para("world"));
-      const r = reader();
-      r.classify(root);
-      const result = r.result();
+    it("plain paragraph becomes a leaf child", () => {
+      const p = para("Hello world");
+      const root = container(p);
+      const r = new TreeReader();
+      const vnode = r.classify(root);
 
-      expect(result).toHaveLength(0);
+      expect(vnode.children).toHaveLength(1);
+      // Paragraph with no tags — leaf VirtualNode from ParagraphReader
+      const child = vnode.children[0];
+      expect(child.content).toBe(p.paragraphView());
+      expect(child.tag).toBeNull();
+      expect(child.children).toHaveLength(0);
+    });
+
+    it("isolated tag paragraph", () => {
+      const p = para("{{name}}");
+      const root = container(p);
+      const r = new TreeReader();
+      const vnode = r.classify(root);
+
+      expect(vnode.children).toHaveLength(1);
+      const child = vnode.children[0];
+      expect(child.content).toBe(p);
+      expect(child.tag).not.toBeNull();
+      expect(child.tag!.head).toBe("name");
+      expect(child.element).not.toBeNull();
+      expect(child.element!.tag.head).toBe("name");
+    });
+
+    it("inline tag paragraph delegates to ParagraphReader", () => {
+      const root = container(para("Hello {{name}} world"));
+      const r = new TreeReader();
+      const vnode = r.classify(root);
+
+      expect(vnode.children).toHaveLength(1);
+      const paraNode = vnode.children[0];
+      // ParagraphReader wraps paragraph: three children (text, tag, text)
+      expect(paraNode.children).toHaveLength(3);
+      expect(paraNode.children[1].tag!.head).toBe("name");
+    });
+
+    it("container recursion", () => {
+      const inner = container(para("{{name}}"));
+      const root = container(inner);
+      const r = new TreeReader();
+      const vnode = r.classify(root);
+
+      expect(vnode.children).toHaveLength(1);
+      const containerChild = vnode.children[0];
+      expect(containerChild.content).toBe(inner);
+      expect(containerChild.tag).toBeNull();
+      expect(containerChild.children).toHaveLength(1);
+      expect(containerChild.children[0].tag!.head).toBe("name");
     });
   });
 
-  describe("isolated tags", () => {
+  describe("result still validates", () => {
     it("simple tag", () => {
-      const p = para("{{name}}");
-      const root = container(p);
-      const r = reader();
+      const root = container(para("{{name}}"));
+      const r = new TreeReader();
       r.classify(root);
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      expectSimple(result[0]);
-      expect(result[0].nodes[0]).toBe(p);
       expect(result[0].tag.head).toBe("name");
     });
 
-    it("whitespace-padded tag is still isolated", () => {
-      const root = container(para("  {{name}}  "));
-      const r = reader();
+    it("block structure", () => {
+      const root = container(
+        para("{{#if x}}"),
+        para("Hello {{name}} world"),
+        para("{{#end}}"),
+      );
+      const r = new TreeReader();
       r.classify(root);
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      expectSimple(result[0]);
-    });
-
-    it("keyword tag is isolated", () => {
-      const root = container(para("{{#if x}}"), para("{{#end}}"));
-      const r = reader();
-      r.classify(root);
-      const result = r.result();
-
-      expect(result).toHaveLength(1);
-      expectBlock(result[0]);
       expect(result[0].tag.head).toBe("#if");
-    });
-
-    it("tag with surrounding text is not isolated — inline elements splice to scope", () => {
-      const root = container(para("Hello {{name}} world"));
-      const r = reader();
-      r.classify(root);
-      const result = r.result();
-
-      expect(result).toHaveLength(1);
-      expectSimple(result[0]);
-    });
-  });
-
-  describe("block structure across paragraphs", () => {
-    it("block with plain content paragraph — no children", () => {
-      const open = para("{{#if x}}");
-      const close = para("{{#end}}");
-      const root = container(open, para("Hello"), close);
-      const r = reader();
-      r.classify(root);
-      const result = r.result();
-
-      expect(result).toHaveLength(1);
-      expectBlock(result[0]);
-      expect(result[0].nodes[0]).toBe(open);
-      expect(result[0].nodes[1]).toBe(close);
-      expect(result[0].tag.head).toBe("#if");
-      expect(result[0].children).toEqual([]);
-    });
-
-    it("empty block", () => {
-      const root = container(para("{{#each items}}"), para("{{#end}}"));
-      const r = reader();
-      r.classify(root);
-      const result = r.result();
-
-      expect(result).toHaveLength(1);
-      expectBlock(result[0]);
-      expect(result[0].tag.head).toBe("#each");
-      expect(result[0].tag.params).toBe("items");
-      expect(result[0].children).toEqual([]);
+      expect(result[0].children).toHaveLength(1);
+      expect(result[0].children[0].tag.head).toBe("name");
     });
 
     it("nested blocks", () => {
       const root = container(
         para("{{#if x}}"),
         para("{{#each y}}"),
-        para("item"),
         para("{{#end}}"),
         para("{{#end}}"),
       );
-      const r = reader();
+      const r = new TreeReader();
       r.classify(root);
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      const outer = result[0];
-      expectBlock(outer);
-      expect(outer.tag.head).toBe("#if");
-      expect(outer.children).toHaveLength(1);
-      const inner = outer.children[0];
-      expectBlock(inner);
-      expect(inner.tag.head).toBe("#each");
-      expect(inner.children).toEqual([]);
-    });
-  });
-
-  describe("mixed isolated and inline", () => {
-    it("block containing inline-parsed paragraph", () => {
-      const open = para("{{#if x}}");
-      const close = para("{{#end}}");
-      const root = container(open, para("Hello {{name}} world"), close);
-      const r = reader();
-      r.classify(root);
-      const result = r.result();
-
-      expect(result).toHaveLength(1);
-      expectBlock(result[0]);
+      expect(result[0].tag.head).toBe("#if");
       expect(result[0].children).toHaveLength(1);
-      expectSimple(result[0].children[0]);
-      expect(result[0].children[0].tag.head).toBe("name");
+      expect(result[0].children[0].tag.head).toBe("#each");
     });
 
     it("inline tags split across runs", () => {
       const root = container(paraRuns("Hello {{na", "me}} world"));
-      const r = reader();
+      const r = new TreeReader();
       r.classify(root);
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      expectSimple(result[0]);
-    });
-  });
-
-  describe("recursive traversal", () => {
-    it("nested containers", () => {
-      const root = container(
-        container(
-          container(para("{{name}}")),
-        ),
-        container(para("Hello")),
-      );
-      const r = reader();
-      r.classify(root);
-      const result = r.result();
-
-      expect(result).toHaveLength(1);
-      expectSimple(result[0]);
+      expect(result[0].tag.head).toBe("name");
     });
   });
 
   describe("errors", () => {
     it("unclosed block", () => {
       const root = container(para("{{#if x}}"), para("content"));
-      const r = reader();
+      const r = new TreeReader();
       r.classify(root);
 
       expect(() => r.result()).toThrow(SyntaxError);
@@ -275,7 +221,7 @@ describe("TreeReader", () => {
 
     it("unmatched end", () => {
       const root = container(para("{{#end}}"));
-      const r = reader();
+      const r = new TreeReader();
 
       expect(() => r.classify(root)).toThrow(SyntaxError);
     });

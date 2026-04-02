@@ -4,8 +4,6 @@
 import { describe, it, expect } from "vitest";
 import AdmZip from "adm-zip";
 import { renderAsync } from "docx-preview";
-import { Parser } from "../../src/template/parser.js";
-import { parseInline } from "../../src/template/inline.js";
 import { TreeReader } from "../../src/template/tree-reader.js";
 import { DomNode } from "../../src/dom/node.js";
 
@@ -59,7 +57,7 @@ describe("docx-preview smoke test", () => {
     const container = await render(buffer);
 
     const root = new DomNode(container);
-    const reader = new TreeReader(new Parser(), parseInline);
+    const reader = new TreeReader();
     reader.classify(root);
     const result = reader.result();
 
@@ -76,12 +74,12 @@ describe("docx-preview smoke test", () => {
     const container = await render(buffer);
 
     const root = new DomNode(container);
-    const reader = new TreeReader(new Parser(), parseInline);
+    const reader = new TreeReader();
     reader.classify(root);
     const result = reader.result();
 
     expect(result).toHaveLength(1);
     expect(result[0].tag.head).toBe("#if");
-    expect(result[0].nodes).toHaveLength(2);
+    expect(result[0].children).toBeDefined();
   });
 });

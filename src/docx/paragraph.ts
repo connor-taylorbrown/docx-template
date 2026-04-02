@@ -1,5 +1,5 @@
 import { Run } from "../template/run.js";
-import { ParagraphView } from "../template/inline.js";
+import { ParagraphView } from "../template/paragraph-reader.js";
 import { XmlRun } from "./run.js";
 
 const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";

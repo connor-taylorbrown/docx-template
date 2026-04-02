@@ -57,7 +57,7 @@ describe("DomNode", () => {
       expect(children[1].isParagraph()).toBe(true);
     });
 
-    it("table structure — transparent through table and tr", () => {
+    it("table structure — full projection", () => {
       const root = el("article",
         el("table",
           el("tr",
@@ -66,17 +66,18 @@ describe("DomNode", () => {
         ),
       );
       const children = node(root).children();
-      // article sees td (via transparent traversal through table, tr)
+      // article sees table directly
       expect(children).toHaveLength(1);
       expect(children[0].isParagraph()).toBe(false);
-      // td > p
-      const tdChildren = children[0].children();
-      expect(tdChildren).toHaveLength(1);
-      expect(tdChildren[0].isParagraph()).toBe(true);
-      expect(tdChildren[0].text()).toBe("cell");
+      // table > tr > td > p
+      const tr = children[0].children()[0];
+      const td = tr.children()[0];
+      const p = td.children()[0];
+      expect(p.isParagraph()).toBe(true);
+      expect(p.text()).toBe("cell");
     });
 
-    it("text box — transparent through svg, g to foreignObject", () => {
+    it("text box — full projection through svg, g to foreignObject", () => {
       const fo = el("foreignObject", para("text box"));
       const root = el("article",
         el("div",
@@ -86,10 +87,14 @@ describe("DomNode", () => {
         ),
       );
       const children = node(root).children();
+      // article sees div directly
       expect(children).toHaveLength(1);
-      // foreignObject is a container
       expect(children[0].isParagraph()).toBe(false);
-      const foChildren = children[0].children();
+      // div > svg > g > foreignObject > p
+      const svg = children[0].children()[0];
+      const g = svg.children()[0];
+      const foNode = g.children()[0];
+      const foChildren = foNode.children();
       expect(foChildren).toHaveLength(1);
       expect(foChildren[0].text()).toBe("text box");
     });
@@ -104,19 +109,18 @@ describe("DomNode", () => {
       expect(children).toHaveLength(3);
       expect(children[0].isParagraph()).toBe(true);
       expect(children[0].text()).toBe("before");
-      expect(children[1].isParagraph()).toBe(false); // td
+      expect(children[1].isParagraph()).toBe(false); // table
       expect(children[2].isParagraph()).toBe(true);
       expect(children[2].text()).toBe("after");
     });
 
-    it("header and footer as containers", () => {
+    it("all child elements are projected", () => {
       const section = el("section",
         el("header", para("head")),
         el("article", para("body")),
         el("footer", para("foot")),
       );
       const children = node(section).children();
-      // section is transparent; header, article, footer are containers
       expect(children).toHaveLength(3);
       expect(children[0].children()[0].text()).toBe("head");
       expect(children[1].children()[0].text()).toBe("body");

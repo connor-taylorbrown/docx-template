@@ -66,7 +66,7 @@ describe("XmlNode", () => {
       expect(p.text()).toBe("cell");
     });
 
-    it("transparent traversal through non-container wrappers", () => {
+    it("full projection through wrappers", () => {
       const n = node(`
         <w:body>
           <w:sdt>
@@ -76,12 +76,13 @@ describe("XmlNode", () => {
           </w:sdt>
         </w:body>
       `);
-      // body should see sdtContent as a child (traversing through w:sdt)
+      // body sees w:sdt directly
       const children = n.children();
       expect(children).toHaveLength(1);
       expect(children[0].isParagraph()).toBe(false);
-      // sdtContent > p
-      const p = children[0].children()[0];
+      // sdt > sdtContent > p
+      const sdtContent = children[0].children()[0];
+      const p = sdtContent.children()[0];
       expect(p.isParagraph()).toBe(true);
       expect(p.text()).toBe("inside sdt");
     });

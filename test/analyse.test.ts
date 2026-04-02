@@ -4,7 +4,6 @@ import { Resolver, TypedElement, FunctionRegistry } from "../src/template/resolv
 import { parse } from "../src/template/expression.js";
 import type { Element } from "../src/template/parser.js";
 import type { Tag } from "../src/template/tag.js";
-import type { DocumentNode } from "../src/template/document-node.js";
 
 const str: TypeHint = { strong: false, type: { kind: "string" } };
 const num: TypeHint = { strong: true, type: { kind: "number" } };
@@ -426,7 +425,6 @@ describe("resolveHint", () => {
 
 // --- analyse tests ---
 
-const nullNode = null as unknown as DocumentNode;
 
 function tag(head: string, params: string | null = null): Tag {
   return {
@@ -441,7 +439,6 @@ function tag(head: string, params: string | null = null): Tag {
 function el(t: Tag, children: Element[] = []): Element {
   return {
     tag: t,
-    nodes: children.length ? [nullNode, nullNode] : [nullNode],
     children,
   };
 }

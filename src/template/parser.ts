@@ -1,11 +1,9 @@
 import { Tag } from "./tag.js";
-import { DocumentNode } from "./document-node.js";
 
 // --- Element type ---
 
 export interface Element {
   tag: Tag;
-  nodes: [DocumentNode] | [DocumentNode, DocumentNode];
   children: Element[];
 }
 
@@ -13,13 +11,12 @@ export interface Element {
 
 interface Scope {
   tag: Tag;
-  node: DocumentNode;
   children: Element[];
 }
 
 /**
  * On-line, stack-based scope tracker. Builds an element tree from a
- * stream of tag nodes and element collections.
+ * stream of tags and element collections.
  */
 export class Parser {
   private readonly root: Element[] = [];
@@ -33,26 +30,33 @@ export class Parser {
   }
 
   /**
-   * Push an isolated tag with its node reference.
-   * - #end keyword: closes current scope.
-   * - Other keyword: opens a new scope.
-   * - Non-keyword: adds a simple element to the current scope.
+   * Push a tag into the parser.
+   * - null: no-op, returns null.
+   * - #end keyword: closes current scope, returns the completed element.
+   * - Other keyword: opens a new scope, returns null.
+   * - Non-keyword: adds a simple element, returns it.
    */
-  addTag(node: DocumentNode, tag: Tag): void {
+  addTag(tag: Tag | null): Element | null {
+    if (tag === null) return null;
+
     if (tag.head === "#end") {
       const scope = this.stack.pop();
       if (!scope) {
         throw new SyntaxError(`Unmatched {{#end}}`);
       }
-      this.current().push({
+      const element: Element = {
         tag: scope.tag,
-        nodes: [scope.node, node],
         children: scope.children,
-      });
+      };
+      this.current().push(element);
+      return element;
     } else if (tag.isKeyword) {
-      this.stack.push({ tag, node, children: [] });
+      this.stack.push({ tag, children: [] });
+      return null;
     } else {
-      this.current().push({ tag, nodes: [node], children: [] });
+      const element: Element = { tag, children: [] };
+      this.current().push(element);
+      return element;
     }
   }
 

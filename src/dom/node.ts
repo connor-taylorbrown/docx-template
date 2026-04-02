@@ -1,25 +1,12 @@
-import { ParagraphView } from "../template/inline.js";
+import { ParagraphView } from "../template/paragraph-reader.js";
 import { TreeNode } from "../template/tree-reader.js";
 import { DomParagraphView } from "./paragraph.js";
 
 /**
- * HTML element tag names that act as containers in the docx-preview
- * output. Each may contain paragraphs or further nested containers.
- */
-const CONTAINER_NAMES = new Set([
-  "ARTICLE",
-  "HEADER",
-  "FOOTER",
-  "TD",
-  "TH",
-  "FOREIGNOBJECT",
-]);
-
-/**
  * Concrete TreeNode backed by an HTML element from docx-preview output.
- * Classifies elements as paragraphs (<p>) or containers (article, header,
- * footer, td, foreignObject), traversing transparently through everything
- * else to reach nested content.
+ * Projects every child element as a node. Paragraphs (<p>) are leaf
+ * nodes; all other elements are containers whose children are
+ * recursively projected.
  */
 export class DomNode extends TreeNode {
   constructor(private readonly element: Element) {
@@ -39,16 +26,9 @@ export class DomNode extends TreeNode {
     if (this.isParagraph()) return [];
 
     const result: DomNode[] = [];
-    const collect = (parent: Element) => {
-      for (const child of parent.children) {
-        if (child.tagName === "P" || CONTAINER_NAMES.has(child.tagName)) {
-          result.push(new DomNode(child));
-        } else {
-          collect(child);
-        }
-      }
-    };
-    collect(this.element);
+    for (const child of this.element.children) {
+      result.push(new DomNode(child));
+    }
     return result;
   }
 

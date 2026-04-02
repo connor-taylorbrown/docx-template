@@ -1,7 +1,7 @@
 import { Tag } from "./tag.js";
-import { DocumentNode } from "./document-node.js";
 import { Parser, Element } from "./parser.js";
-import { ParagraphView } from "./inline.js";
+import { ParagraphView, ParagraphReader } from "./paragraph-reader.js";
+import { VirtualNode } from "./virtual-node.js";
 
 const ISOLATED_PATTERN = /^\s*\{\{(#?\w+)(.*?)\}\}\s*$/;
 
@@ -29,7 +29,7 @@ function detectIsolatedTag(text: string): Tag | null {
  * non-leaf nodes are containers (body, table cell, etc.).
  * Implementations differ by tree type (XML vs. DOM).
  */
-export abstract class TreeNode extends DocumentNode {
+export abstract class TreeNode {
   /** Child nodes in document order. Empty for paragraphs. */
   abstract children(): TreeNode[];
 
@@ -44,52 +44,53 @@ export abstract class TreeNode extends DocumentNode {
 }
 
 /**
- * Parses a single paragraph's inline content. Accepts a ParagraphView,
- * returns the resulting elements. Extracted as a type to enable
- * constructor injection and test mocking.
- */
-export type InlineParser = (view: ParagraphView) => Element[];
-
-/**
  * Recursive document tree reader. Traverses a document tree in order,
- * classifying each paragraph as either an isolated tag or inline-parsed
- * content, and feeding results to a stack-based parser to build the
- * element tree.
+ * mapping each node to a VirtualNode. Paragraphs are classified as
+ * either isolated tags or inline-parsed content; containers are
+ * recursed into. A Parser tracks scope across the full tree.
  */
 export class TreeReader {
-  private readonly parser: Parser;
-  private readonly inlineParser: InlineParser;
-
-  constructor(parser: Parser, inlineParser: InlineParser) {
-    this.parser = parser;
-    this.inlineParser = inlineParser;
-  }
+  private readonly parser = new Parser();
 
   /**
-   * Recursively classify children of the given node.
+   * Recursively map a TreeNode to a VirtualNode.
    *
-   * - Paragraph with isolated tag: push node and tag to parser.
-   * - Other paragraph: perform inline parse, push node and resulting
-   *   elements to parser. The inline parse may modify the paragraph
-   *   tree (run normalisation).
-   * - Container: recurse into children.
+   * - Paragraph with isolated tag: creates a tagged VirtualNode,
+   *   pushes tag to parser.
+   * - Other paragraph: delegates to ParagraphReader.
+   * - Container: recurses into children.
    */
-  classify(node: TreeNode): void {
+  classify(node: TreeNode): VirtualNode {
+    const children: VirtualNode[] = [];
+
     for (const child of node.children()) {
       if (child.isParagraph()) {
         const tag = detectIsolatedTag(child.text());
         if (tag) {
-          this.parser.addTag(child, tag);
+          children.push(
+            new VirtualNode({
+              content: child,
+              tag,
+              element: this.parser.addTag(tag),
+              children: [],
+            }),
+          );
         } else {
-          const elements = this.inlineParser(child.paragraphView());
-          if (elements.length > 0) {
-            this.parser.addCollection(elements);
-          }
+          const paragraphReader = new ParagraphReader();
+          children.push(paragraphReader.classify(child.paragraphView()));
+          this.parser.addCollection(paragraphReader.result());
         }
       } else {
-        this.classify(child);
+        children.push(this.classify(child));
       }
     }
+
+    return new VirtualNode({
+      content: node,
+      tag: null,
+      element: null,
+      children,
+    });
   }
 
   /**

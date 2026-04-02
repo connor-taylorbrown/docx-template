@@ -6,12 +6,12 @@
 src/
 ├── template/          # Core parsing logic (tree-agnostic)
 │   ├── tag.ts         # Tag detection and interface definition
-│   ├── document-node.ts # Abstract base class for all nodes
 │   ├── parser.ts      # Stack-based parser, Element interface
-│   ├── inline.ts      # ParagraphView abstraction, parseInline()
 │   ├── normaliser.ts  # Run normalization algorithm
 │   ├── run.ts         # Abstract run operations (split/merge)
 │   ├── tree-reader.ts # TreeNode abstraction, TreeReader class
+│   ├── virtual-node.ts # VirtualNode (DOM-to-template mapping)
+│   ├── paragraph-reader.ts # ParagraphView, ParagraphReader class
 │   ├── operator.ts    # Operator enum, Literal enum
 │   ├── expression.ts  # Expression interface, tokenizer, parseExpression()
 │   ├── resolve.ts     # Pass 1: Resolver class, TypedElement, FunctionRegistry
@@ -47,12 +47,26 @@ Tag patterns matched: `/\{\{(#?\w+)(.*?)\}\}/g`
 ```ts
 interface Element {
   tag: Tag;
-  nodes: [DocumentNode] | [DocumentNode, DocumentNode];
   children: Element[];
 }
 ```
-- Simple elements: single `DocumentNode`, no children.
-- Block elements: two `DocumentNode` references, nested children.
+Pure template structure — no DOM references. The parser returns
+`Element | null` from `addTag`: the element for simple/end tags,
+`null` for start tags (scope opened) and null input.
+
+### VirtualNode (`src/template/virtual-node.ts`)
+```ts
+class VirtualNode {
+  content: unknown;         // TreeNode | ParagraphView | Run
+  tag: Tag | null;
+  element: Element | null;  // parser signal, when applicable
+  children: VirtualNode[];
+}
+```
+Maps DOM structure to template structure. Produced by `TreeReader`
+(tree level) and `ParagraphReader` (inline level). The `content`
+field is the concrete DOM attachment point; `element` carries the
+parser's contextual signal for that position.
 
 ### TypedElement (`src/template/resolve.ts`)
 ```ts
@@ -76,14 +90,13 @@ type BaseType =
   | { kind: "structure"; properties: Map<string, TypeHint> };
 ```
 
-### DocumentNode Hierarchy
-- **DocumentNode** (base, abstract)
-  - **Run** (extends DocumentNode): abstract text-bearing node
-    - DomRun (HTML span wrapper)
-    - XmlRun (w:r XML element wrapper)
-  - **TreeNode** (extends DocumentNode): abstract tree node
-    - DomNode (HTML element tree walker)
-    - XmlNode (XML element tree walker)
+### Abstract Hierarchies
+- **Run** (abstract): text-bearing node (split/merge)
+  - DomRun (HTML span wrapper)
+  - XmlRun (w:r XML element wrapper)
+- **TreeNode** (abstract): document tree node
+  - DomNode (full projection of HTML element tree)
+  - XmlNode (full projection of XML element tree)
 
 ## Architectural Patterns
 
@@ -95,11 +108,19 @@ type BaseType =
 3. `Run` — abstract text-bearing node interface
 4. Concrete implementations per tree type (dom/, docx/)
 
-**Algorithms**:
+**Tree regularisation pipeline** (`TreeReader` → `ParagraphReader` → `VirtualNode`):
+- `TreeReader.classify(node)` recursively maps a `TreeNode` tree to a `VirtualNode` tree.
+  - Isolated tag paragraphs: single `VirtualNode` with tag/element populated.
+  - Inline paragraphs: delegates to `ParagraphReader`, which maps each normalised run entry to a child `VirtualNode`.
+  - Containers: recursed, producing nested `VirtualNode` subtrees.
+- Both readers own a `Parser` instance. `ParagraphReader` handles inline scope; `TreeReader` handles tree-level scope and splices paragraph-level elements via `addCollection`.
+- `result()` on either reader validates scope closure and returns the `Element` tree.
+
+**Other algorithms**:
 - Tag detection: regex-based in-order text scanning
 - Run normalization: queue-based with split/merge operations
 - Parsing: stack-based on-line parser for element tree
-- Tree traversal: recursive document tree classification
+- Node projection: `DomNode` and `XmlNode` project every child element as a node (no transparent traversal); only paragraph detection is tag-specific
 - Static analysis (two-pass):
   1. Resolution (`resolve.ts`): Expression → TypedElement with function signatures
   2. Type hinting (`analyse.ts`): top-down hint propagation, variable binding via ReferenceMap

@@ -1,5 +1,5 @@
 import { Run } from "../template/run.js";
-import { ParagraphView } from "../template/inline.js";
+import { ParagraphView } from "../template/paragraph-reader.js";
 import { DomRun } from "./run.js";
 
 /**
