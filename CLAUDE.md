@@ -46,5 +46,4 @@ Template engine for DOCX documents. Parses `{{tag}}` syntax from document trees,
 
 - See `arch/` for design documents
 - `arch/codebase-overview.md` — full structural overview with type hierarchy
-- `arch/renderer.md` — renderer and expression system design
 - `arch/analysis.md` — static analysis design (two-pass type hinting, ReferenceMap, element orchestration)
