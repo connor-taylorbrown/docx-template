@@ -1,28 +1,7 @@
-import { Tag } from "./tag.js";
+import { detectIsolatedTag } from "./tag.js";
 import { Parser, Element } from "./parser.js";
 import { ParagraphView, ParagraphReader } from "./paragraph-reader.js";
 import { VirtualNode } from "./virtual-node.js";
-
-const ISOLATED_PATTERN = /^\s*\{\{(#?\w+)(.*?)\}\}\s*$/;
-
-/**
- * Match trimmed paragraph text as exactly one tag. Whitespace-only
- * content surrounding the tag is not visible after rendering, so the
- * entire paragraph is owned by the tag.
- */
-function detectIsolatedTag(text: string): Tag | null {
-  const match = ISOLATED_PATTERN.exec(text);
-  if (!match) return null;
-  const head = match[1];
-  const params = match[2].trim() || null;
-  return {
-    offset: match.index,
-    length: match[0].length,
-    head,
-    params,
-    isKeyword: head.startsWith("#"),
-  };
-}
 
 /**
  * Abstract view of a document tree node. Leaf nodes are paragraphs;
@@ -67,11 +46,12 @@ export class TreeReader {
       if (child.isParagraph()) {
         const tag = detectIsolatedTag(child.text());
         if (tag) {
+          const { id, element } = this.parser.addTag(tag);
           children.push(
             new VirtualNode({
               content: child,
-              tag,
-              element: this.parser.addTag(tag),
+              id,
+              element,
               children: [],
             }),
           );
@@ -87,7 +67,7 @@ export class TreeReader {
 
     return new VirtualNode({
       content: node,
-      tag: null,
+      id: -1,
       element: null,
       children,
     });

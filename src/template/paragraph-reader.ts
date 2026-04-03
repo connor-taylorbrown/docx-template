@@ -35,7 +35,7 @@ export class ParagraphReader {
     if (tags.length === 0) {
       return new VirtualNode({
         content: view,
-        tag: null,
+        id: -1,
         element: null,
         children: [],
       });
@@ -46,11 +46,12 @@ export class ParagraphReader {
 
     const children: VirtualNode[] = [];
     for (const { tag, content } of entries) {
+      const { id, element } = this.parser.addTag(tag);
       children.push(
         new VirtualNode({
           content,
-          tag,
-          element: this.parser.addTag(tag),
+          id,
+          element,
           children: [],
         }),
       );
@@ -58,7 +59,7 @@ export class ParagraphReader {
 
     return new VirtualNode({
       content: view,
-      tag: null,
+      id: -1,
       element: null,
       children,
     });

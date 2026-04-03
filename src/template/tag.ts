@@ -9,6 +9,8 @@ export interface Tag {
   params: string | null;
   /** Whether this is a keyword tag (head starts with #). */
   isKeyword: boolean;
+  /** The full matched tag string, e.g. "{{#if x}}". */
+  raw: string;
 }
 
 const TAG_PATTERN = /\{\{(#?\w+)(.*?)\}\}/g;
@@ -25,8 +27,32 @@ export function detectTags(text: string): Tag[] {
       head,
       params,
       isKeyword: head.startsWith("#"),
+      raw: match[0],
     });
   }
   TAG_PATTERN.lastIndex = 0;
   return tags;
+}
+
+const ISOLATED_PATTERN = /^\s*(\{\{(#?\w+)(.*?)\}\})\s*$/;
+
+/**
+ * Match trimmed paragraph text as exactly one tag. Whitespace-only
+ * content surrounding the tag is not visible after rendering, so the
+ * entire paragraph is owned by the tag.
+ */
+export function detectIsolatedTag(text: string): Tag | null {
+  const match = ISOLATED_PATTERN.exec(text);
+  if (!match) return null;
+  const raw = match[1];
+  const head = match[2];
+  const params = match[3].trim() || null;
+  return {
+    offset: match.index,
+    length: match[0].length,
+    head,
+    params,
+    isKeyword: head.startsWith("#"),
+    raw,
+  };
 }

@@ -4,7 +4,7 @@ import { Parser, Element } from "../src/template/parser.js";
 
 /** Helper: build a non-keyword tag. */
 function simple(head: string): Tag {
-  return { offset: 0, length: 0, head, params: null, isKeyword: false };
+  return { offset: 0, length: 0, head, params: null, isKeyword: false, raw: `{{${head}}}` };
 }
 
 /** Helper: build a keyword tag. */
@@ -15,12 +15,13 @@ function keyword(head: string): Tag {
     head: `#${head}`,
     params: null,
     isKeyword: true,
+    raw: `{{#${head}}}`,
   };
 }
 
 /** Helper: build an #end tag. */
 function end(): Tag {
-  return { offset: 0, length: 0, head: "#end", params: null, isKeyword: true };
+  return { offset: 0, length: 0, head: "#end", params: null, isKeyword: true, raw: "{{#end}}" };
 }
 
 describe("parser", () => {
@@ -33,21 +34,21 @@ describe("parser", () => {
     it("single simple element", () => {
       const tag = simple("name");
       const parser = new Parser();
-      const result = parser.addTag(tag);
+      const { element } = parser.addTag(tag);
 
-      expect(result).not.toBeNull();
-      expect(result!.tag).toBe(tag);
-      expect(result!.children).toHaveLength(0);
+      expect(element).not.toBeNull();
+      expect(element!.tag).toBe(tag);
+      expect(element!.children).toHaveLength(0);
 
       const elements = parser.parse();
       expect(elements).toHaveLength(1);
-      expect(elements[0]).toBe(result);
+      expect(elements[0]).toBe(element);
     });
 
     it("multiple entries at root", () => {
       const parser = new Parser();
-      const r1 = parser.addTag(simple("x"));
-      const r2 = parser.addTag(simple("y"));
+      const r1 = parser.addTag(simple("x")).element;
+      const r2 = parser.addTag(simple("y")).element;
       const result = parser.parse();
 
       expect(result).toHaveLength(2);
@@ -56,8 +57,8 @@ describe("parser", () => {
     });
 
     it("addCollection splices elements into current scope", () => {
-      const e1: Element = { tag: simple("a"), children: [] };
-      const e2: Element = { tag: simple("b"), children: [] };
+      const e1: Element = { id: -1, tag: simple("a"), children: [] };
+      const e2: Element = { id: -1, tag: simple("b"), children: [] };
       const parser = new Parser();
       parser.addCollection([e1, e2]);
       const result = parser.parse();
@@ -68,18 +69,59 @@ describe("parser", () => {
     });
   });
 
+  describe("IDs", () => {
+    it("IDs increment monotonically", () => {
+      const parser = new Parser();
+      const r0 = parser.addTag(simple("a"));
+      const r1 = parser.addTag(simple("b"));
+      const r2 = parser.addTag(simple("c"));
+
+      expect(r0.id).toBe(0);
+      expect(r1.id).toBe(1);
+      expect(r2.id).toBe(2);
+    });
+
+    it("null tag gets id -1 and does not consume a counter slot", () => {
+      const parser = new Parser();
+      const r0 = parser.addTag(simple("a"));
+      const r1 = parser.addTag(null);
+      const r2 = parser.addTag(simple("b"));
+
+      expect(r0.id).toBe(0);
+      expect(r1.id).toBe(-1);
+      expect(r1.element).toBeNull();
+      expect(r2.id).toBe(1);
+    });
+
+    it("start tag ID stored on element", () => {
+      const parser = new Parser();
+      const start = parser.addTag(keyword("if"));
+      const close = parser.addTag(end());
+
+      expect(start.element).toBeNull();
+      expect(close.element).not.toBeNull();
+      expect(close.element!.id).toBe(start.id);
+    });
+
+    it("simple element ID is self-referencing", () => {
+      const parser = new Parser();
+      const { id, element } = parser.addTag(simple("x"));
+      expect(element!.id).toBe(id);
+    });
+  });
+
   describe("return values", () => {
     it("simple tag returns element", () => {
       const parser = new Parser();
-      const result = parser.addTag(simple("name"));
-      expect(result).not.toBeNull();
-      expect(result!.tag.head).toBe("name");
+      const { element } = parser.addTag(simple("name"));
+      expect(element).not.toBeNull();
+      expect(element!.tag.head).toBe("name");
     });
 
-    it("start tag returns null", () => {
+    it("start tag returns null element", () => {
       const parser = new Parser();
-      const result = parser.addTag(keyword("if"));
-      expect(result).toBeNull();
+      const { element } = parser.addTag(keyword("if"));
+      expect(element).toBeNull();
       // clean up
       parser.addTag(end());
     });
@@ -87,15 +129,15 @@ describe("parser", () => {
     it("end tag returns completed element", () => {
       const parser = new Parser();
       parser.addTag(keyword("if"));
-      const result = parser.addTag(end());
-      expect(result).not.toBeNull();
-      expect(result!.tag.head).toBe("#if");
+      const { element } = parser.addTag(end());
+      expect(element).not.toBeNull();
+      expect(element!.tag.head).toBe("#if");
     });
 
-    it("null tag returns null", () => {
+    it("null tag returns null element", () => {
       const parser = new Parser();
-      const result = parser.addTag(null);
-      expect(result).toBeNull();
+      const { element } = parser.addTag(null);
+      expect(element).toBeNull();
       expect(parser.parse()).toEqual([]);
     });
   });
@@ -117,7 +159,7 @@ describe("parser", () => {
       const inner = simple("name");
       const parser = new Parser();
       parser.addTag(keyword("if"));
-      const innerEl = parser.addTag(inner);
+      const innerEl = parser.addTag(inner).element;
       parser.addTag(end());
       const result = parser.parse();
 
@@ -128,8 +170,8 @@ describe("parser", () => {
     });
 
     it("block with spliced elements", () => {
-      const e1: Element = { tag: simple("a"), children: [] };
-      const e2: Element = { tag: simple("b"), children: [] };
+      const e1: Element = { id: -1, tag: simple("a"), children: [] };
+      const e2: Element = { id: -1, tag: simple("b"), children: [] };
       const parser = new Parser();
       parser.addTag(keyword("if"));
       parser.addCollection([e1, e2]);
@@ -149,7 +191,7 @@ describe("parser", () => {
       parser.addTag(keyword("if"));
       parser.addTag(keyword("each"));
       parser.addTag(end());
-      const outerEl = parser.addTag(end());
+      const outerEl = parser.addTag(end()).element;
       const result = parser.parse();
 
       expect(result).toHaveLength(1);
@@ -159,8 +201,8 @@ describe("parser", () => {
     });
 
     it("elements around nested block", () => {
-      const before: Element = { tag: simple("x"), children: [] };
-      const after: Element = { tag: simple("y"), children: [] };
+      const before: Element = { id: -1, tag: simple("x"), children: [] };
+      const after: Element = { id: -1, tag: simple("y"), children: [] };
       const parser = new Parser();
       parser.addTag(keyword("if"));
       parser.addCollection([before]);
@@ -202,12 +244,12 @@ describe("parser", () => {
 
   describe("mixed sequences", () => {
     it("elements before and after block", () => {
-      const el: Element = { tag: simple("z"), children: [] };
+      const el: Element = { id: -1, tag: simple("z"), children: [] };
       const parser = new Parser();
       parser.addCollection([el]);
       parser.addTag(keyword("if"));
       parser.addTag(end());
-      const afterEl = parser.addTag(simple("w"));
+      const afterEl = parser.addTag(simple("w")).element;
       const result = parser.parse();
 
       expect(result).toHaveLength(3);
@@ -232,9 +274,9 @@ describe("parser", () => {
     it("block with mixed children", () => {
       const parser = new Parser();
       parser.addTag(keyword("if"));
-      const nameEl = parser.addTag(simple("name"));
+      const nameEl = parser.addTag(simple("name")).element;
       parser.addTag(keyword("each"));
-      const itemEl = parser.addTag(simple("item"));
+      const itemEl = parser.addTag(simple("item")).element;
       parser.addTag(end());
       parser.addTag(end());
       const result = parser.parse();

@@ -11,6 +11,7 @@ function tag(offset: number, length: number, head = "x"): Tag {
     head,
     params: null,
     isKeyword: head.startsWith("#"),
+    raw: `{{${head}}}`,
   };
 }
 

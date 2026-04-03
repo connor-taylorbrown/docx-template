@@ -3,13 +3,22 @@ import { Tag } from "./tag.js";
 // --- Element type ---
 
 export interface Element {
+  id: number;
   tag: Tag;
   children: Element[];
+}
+
+// --- Tag result ---
+
+export interface TagResult {
+  id: number;
+  element: Element | null;
 }
 
 // --- Parser ---
 
 interface Scope {
+  id: number;
   tag: Tag;
   children: Element[];
 }
@@ -21,6 +30,7 @@ interface Scope {
 export class Parser {
   private readonly root: Element[] = [];
   private readonly stack: Scope[] = [];
+  private nextId = 0;
 
   /** The children list of the current scope (or root if no open scope). */
   private current(): Element[] {
@@ -31,13 +41,16 @@ export class Parser {
 
   /**
    * Push a tag into the parser.
-   * - null: no-op, returns null.
-   * - #end keyword: closes current scope, returns the completed element.
-   * - Other keyword: opens a new scope, returns null.
-   * - Non-keyword: adds a simple element, returns it.
+   * - null: no-op, returns { id, element: null }.
+   * - #end keyword: closes current scope, returns { id, element }.
+   * - Other keyword: opens a new scope, returns { id, element: null }.
+   * - Non-keyword: adds a simple element, returns { id, element }.
+   *
+   * IDs increment monotonically. Block elements carry the start tag's ID.
    */
-  addTag(tag: Tag | null): Element | null {
-    if (tag === null) return null;
+  addTag(tag: Tag | null): TagResult {
+    if (tag === null) return { id: -1, element: null };
+    const id = this.nextId++;
 
     if (tag.head === "#end") {
       const scope = this.stack.pop();
@@ -45,18 +58,19 @@ export class Parser {
         throw new SyntaxError(`Unmatched {{#end}}`);
       }
       const element: Element = {
+        id: scope.id,
         tag: scope.tag,
         children: scope.children,
       };
       this.current().push(element);
-      return element;
+      return { id, element };
     } else if (tag.isKeyword) {
-      this.stack.push({ tag, children: [] });
-      return null;
+      this.stack.push({ id, tag, children: [] });
+      return { id, element: null };
     } else {
-      const element: Element = { tag, children: [] };
+      const element: Element = { id, tag, children: [] };
       this.current().push(element);
-      return element;
+      return { id, element };
     }
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Tag, detectTags } from "../src/template/tag.js";
+import { Tag, detectTags, detectIsolatedTag } from "../src/template/tag.js";
 
 describe("detectTags", () => {
   describe("no tags", () => {
@@ -30,6 +30,7 @@ describe("detectTags", () => {
         head: "name",
         params: null,
         isKeyword: false,
+        raw: "{{name}}",
       });
     });
 
@@ -63,6 +64,7 @@ describe("detectTags", () => {
         head: "#end",
         params: null,
         isKeyword: true,
+        raw: "{{#end}}",
       });
     });
 
@@ -128,5 +130,51 @@ describe("detectTags", () => {
       expect(result[0].head).toBe("#end");
       expect(result[0].params).toBeNull();
     });
+  });
+
+  describe("raw field", () => {
+    it("simple tag", () => {
+      const result = detectTags("Hello {{name}} world");
+      expect(result[0].raw).toBe("{{name}}");
+    });
+
+    it("keyword with params", () => {
+      const result = detectTags("{{#if show}}");
+      expect(result[0].raw).toBe("{{#if show}}");
+    });
+
+    it("keyword with trailing space", () => {
+      const result = detectTags("{{#if  show }}");
+      expect(result[0].raw).toBe("{{#if  show }}");
+    });
+  });
+});
+
+describe("detectIsolatedTag", () => {
+  it("exact tag", () => {
+    const tag = detectIsolatedTag("{{name}}");
+    expect(tag).not.toBeNull();
+    expect(tag!.head).toBe("name");
+    expect(tag!.raw).toBe("{{name}}");
+  });
+
+  it("whitespace-padded tag", () => {
+    const tag = detectIsolatedTag("  {{#if x}}  ");
+    expect(tag).not.toBeNull();
+    expect(tag!.head).toBe("#if");
+    expect(tag!.params).toBe("x");
+    expect(tag!.raw).toBe("{{#if x}}");
+  });
+
+  it("non-isolated text returns null", () => {
+    expect(detectIsolatedTag("Hello {{name}} world")).toBeNull();
+  });
+
+  it("plain text returns null", () => {
+    expect(detectIsolatedTag("Hello world")).toBeNull();
+  });
+
+  it("empty string returns null", () => {
+    expect(detectIsolatedTag("")).toBeNull();
   });
 });

@@ -1,4 +1,3 @@
-import type { Tag } from "./tag.js";
 import type { Element } from "./parser.js";
 
 /**
@@ -8,22 +7,28 @@ import type { Element } from "./parser.js";
 export class VirtualNode {
   /** The DOM content: a TreeNode, ParagraphView, or Run. */
   readonly content: unknown;
-  /** The tag at this position, if any. */
-  readonly tag: Tag | null;
+  /** Parser-assigned tag ID. */
+  id: number;
   /** The parser element, if the parser produced one at this position. */
-  readonly element: Element | null;
+  element: Element | null;
+  /** Parent virtual node, or null for the root. */
+  parent: VirtualNode | null;
   /** Child virtual nodes. */
   readonly children: VirtualNode[];
 
   constructor(opts: {
     content: unknown;
-    tag: Tag | null;
+    id: number;
     element: Element | null;
     children: VirtualNode[];
   }) {
     this.content = opts.content;
-    this.tag = opts.tag;
+    this.id = opts.id;
     this.element = opts.element;
+    this.parent = null;
     this.children = opts.children;
+    for (const child of this.children) {
+      child.parent = this;
+    }
   }
 }

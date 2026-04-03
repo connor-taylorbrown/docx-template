@@ -95,7 +95,6 @@ describe("TreeReader", () => {
 
       expect(vnode).toBeInstanceOf(VirtualNode);
       expect(vnode.content).toBe(root);
-      expect(vnode.tag).toBeNull();
       expect(vnode.element).toBeNull();
     });
 
@@ -106,10 +105,9 @@ describe("TreeReader", () => {
       const vnode = r.classify(root);
 
       expect(vnode.children).toHaveLength(1);
-      // Paragraph with no tags — leaf VirtualNode from ParagraphReader
       const child = vnode.children[0];
       expect(child.content).toBe(p.paragraphView());
-      expect(child.tag).toBeNull();
+      expect(child.element).toBeNull();
       expect(child.children).toHaveLength(0);
     });
 
@@ -122,8 +120,6 @@ describe("TreeReader", () => {
       expect(vnode.children).toHaveLength(1);
       const child = vnode.children[0];
       expect(child.content).toBe(p);
-      expect(child.tag).not.toBeNull();
-      expect(child.tag!.head).toBe("name");
       expect(child.element).not.toBeNull();
       expect(child.element!.tag.head).toBe("name");
     });
@@ -137,7 +133,7 @@ describe("TreeReader", () => {
       const paraNode = vnode.children[0];
       // ParagraphReader wraps paragraph: three children (text, tag, text)
       expect(paraNode.children).toHaveLength(3);
-      expect(paraNode.children[1].tag!.head).toBe("name");
+      expect(paraNode.children[1].element!.tag.head).toBe("name");
     });
 
     it("container recursion", () => {
@@ -149,9 +145,52 @@ describe("TreeReader", () => {
       expect(vnode.children).toHaveLength(1);
       const containerChild = vnode.children[0];
       expect(containerChild.content).toBe(inner);
-      expect(containerChild.tag).toBeNull();
+      expect(containerChild.element).toBeNull();
       expect(containerChild.children).toHaveLength(1);
-      expect(containerChild.children[0].tag!.head).toBe("name");
+      expect(containerChild.children[0].element!.tag.head).toBe("name");
+    });
+  });
+
+  describe("parent references", () => {
+    it("root has null parent", () => {
+      const root = container(para("Hello"));
+      const r = new TreeReader();
+      const vnode = r.classify(root);
+
+      expect(vnode.parent).toBeNull();
+    });
+
+    it("children have parent set", () => {
+      const root = container(para("{{name}}"), para("text"));
+      const r = new TreeReader();
+      const vnode = r.classify(root);
+
+      for (const child of vnode.children) {
+        expect(child.parent).toBe(vnode);
+      }
+    });
+
+    it("nested container children have correct parents", () => {
+      const inner = container(para("{{name}}"));
+      const root = container(inner);
+      const r = new TreeReader();
+      const vnode = r.classify(root);
+
+      const containerChild = vnode.children[0];
+      expect(containerChild.parent).toBe(vnode);
+      expect(containerChild.children[0].parent).toBe(containerChild);
+    });
+
+    it("inline paragraph children have paragraph as parent", () => {
+      const root = container(para("Hello {{name}} world"));
+      const r = new TreeReader();
+      const vnode = r.classify(root);
+
+      const paraNode = vnode.children[0];
+      expect(paraNode.parent).toBe(vnode);
+      for (const child of paraNode.children) {
+        expect(child.parent).toBe(paraNode);
+      }
     });
   });
 

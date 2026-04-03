@@ -433,11 +433,14 @@ function tag(head: string, params: string | null = null): Tag {
     head,
     params,
     isKeyword: head.startsWith("#") || head.startsWith("/"),
+    raw: `{{${head}${params ? " " + params : ""}}}`,
   };
 }
 
+let nextId = 0;
 function el(t: Tag, children: Element[] = []): Element {
   return {
+    id: nextId++,
     tag: t,
     children,
   };

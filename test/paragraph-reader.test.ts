@@ -33,7 +33,6 @@ describe("ParagraphReader", () => {
       const vnode = reader.classify(view);
 
       expect(vnode.content).toBe(view);
-      expect(vnode.tag).toBeNull();
       expect(vnode.element).toBeNull();
       expect(vnode.children).toHaveLength(0);
     });
@@ -57,8 +56,6 @@ describe("ParagraphReader", () => {
       expect(vnode.children).toHaveLength(1);
 
       const child = vnode.children[0];
-      expect(child.tag).not.toBeNull();
-      expect(child.tag!.head).toBe("name");
       expect(child.element).not.toBeNull();
       expect(child.element!.tag.head).toBe("name");
       expect(child.children).toHaveLength(0);
@@ -72,15 +69,13 @@ describe("ParagraphReader", () => {
       expect(vnode.children).toHaveLength(3);
 
       // "Hello " — no tag
-      expect(vnode.children[0].tag).toBeNull();
       expect(vnode.children[0].element).toBeNull();
 
       // "{{name}}" — tagged
-      expect(vnode.children[1].tag!.head).toBe("name");
       expect(vnode.children[1].element).not.toBeNull();
+      expect(vnode.children[1].element!.tag.head).toBe("name");
 
       // " world" — no tag
-      expect(vnode.children[2].tag).toBeNull();
       expect(vnode.children[2].element).toBeNull();
     });
 
@@ -102,14 +97,14 @@ describe("ParagraphReader", () => {
       const reader = new ParagraphReader();
       const vnode = reader.classify(view);
 
-      const ifChild = vnode.children.find((c) => c.tag?.head === "#if");
-      expect(ifChild).toBeDefined();
-      expect(ifChild!.element).toBeNull();
+      // Start tag: element is null, has a parser ID
+      expect(vnode.children[0].element).toBeNull();
+      expect(vnode.children[0].id).toBeGreaterThanOrEqual(0);
 
-      const endChild = vnode.children.find((c) => c.tag?.head === "#end");
-      expect(endChild).toBeDefined();
-      expect(endChild!.element).not.toBeNull();
-      expect(endChild!.element!.tag.head).toBe("#if");
+      // End tag: element is the completed block
+      const endChild = vnode.children[vnode.children.length - 1];
+      expect(endChild.element).not.toBeNull();
+      expect(endChild.element!.tag.head).toBe("#if");
     });
 
     it("result validates block structure", () => {
@@ -122,6 +117,26 @@ describe("ParagraphReader", () => {
 
       expect(elements).toHaveLength(1);
       expect(elements[0].tag.head).toBe("#if");
+    });
+  });
+
+  describe("parent references", () => {
+    it("children have parent set", () => {
+      const view = new TestParagraph([new TestRun("Hello {{name}} world")]);
+      const reader = new ParagraphReader();
+      const vnode = reader.classify(view);
+
+      for (const child of vnode.children) {
+        expect(child.parent).toBe(vnode);
+      }
+    });
+
+    it("leaf node has null parent", () => {
+      const view = new TestParagraph([new TestRun("Hello world")]);
+      const reader = new ParagraphReader();
+      const vnode = reader.classify(view);
+
+      expect(vnode.parent).toBeNull();
     });
   });
 
