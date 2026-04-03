@@ -39,3 +39,22 @@ return new VirtualNode({
 ```
 
 With a similar change to `TreeReader.classify`, the result is a regular tree of `VirtualNode`s, with signals from the parser materialised in context. Calling `result` post-`classify` guarantees that the template structure is semantically valid, and the `VirtualNode` structure itself is guaranteed to have normalised runs. All that remains for complete tree regularisation is *hoisting*&mdash;or, the guarantee that block element boundary nodes are DOM siblings. This can be deferred until after the listed changes are complete. 
+
+### Hoisting
+- `TreeReader` now produces a mutable `VirtualNode` graph, which references start tags and elements. No back-reference from element to node exists.
+- However, a "hoisting grammar" needs to be enforced, which relies to some extent on identifying the boundary nodes that were once stored on the element.
+- Boundary nodes can be identified in linear time using **breadth-first search,** provided they are **marked as belonging to the same element.** This method has the added benefit of enforcing equal depth of boundary nodes (rendering invariant #1), before validating any other aspect of their intervening paths. *On start, push element N to the level stack. On end, pop **matching element,** or throw. Tracking depth with a sentinel value, if the sentinel is reached and the stack is non-empty, throw.*
+- On pop, the search appends to **a list of virtual node pairs.** These pairs represent the endpoints of a path through their lowest common ancestor, which is guaranteed to be equidistant (by invariant #1). However, other aspects of the path may make the element non-renderable. This necessitates **parent referencing** such that each path can be traversed in linear time, using a two-pointer method.
+- While parents are not identical, guarantee the following rendering invariants: (2) that DOM tags are equal, and (3) that node text matches the raw text of the template tag. *This should be added to the Tag contract to avoid the need for repeated regex checks (leaky abstraction smell, poor performance).*
+- **Hoist:** after loop, replace result nodes with endpoints.
+
+**Changes to existing contracts:**
+- *Element matching:* the parser naturally encapsulates the concern of assigning an identifier to tags, as it receives them in order, and matches them to make elements. Modify `addTag` to return a pair of (`id`, `element`), incrementing a class field for each tag, and storing `id` on the `Scope` object. On `#end`, assign `scope.id` to `element.id`.
+  - (id: a, element: null): start tag.
+  - (id: a, element: (id: a)): simple element.
+  - (id: a, element: (id: b)): block element.
+- *Tags:* the `Reader` classes orchestrate tag detection, using tag detection functions. These functions are in a position to store the *exact* matched text on `Tag`, simplifying enforcement of invariant #3. *Move `detectIsolatedTag` into `tag.ts`.*
+- *Parent referencing:* the `Reader` classes produce `VirtualNode`s, and may set a `parent` reference on all children before returning.
+
+**Further cleanup:**
+- The `tag` field on `VirtualNode` is not required, as the hoisting process can rely on `id` and `element` to find paths, and on `element.tag` to validate those paths. Given this cleanup, the final hoist operation consists of copying `id` and `element`.

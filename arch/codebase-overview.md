@@ -5,13 +5,14 @@
 ```
 src/
 ├── template/          # Core parsing logic (tree-agnostic)
-│   ├── tag.ts         # Tag detection and interface definition
-│   ├── parser.ts      # Stack-based parser, Element interface
+│   ├── tag.ts         # Tag interface, detectTags(), detectIsolatedTag()
+│   ├── parser.ts      # Stack-based parser, Element/TagResult interfaces
 │   ├── normaliser.ts  # Run normalization algorithm
 │   ├── run.ts         # Abstract run operations (split/merge)
 │   ├── tree-reader.ts # TreeNode abstraction, TreeReader class
 │   ├── virtual-node.ts # VirtualNode (DOM-to-template mapping)
 │   ├── paragraph-reader.ts # ParagraphView, ParagraphReader class
+│   ├── hoist.ts       # BFS boundary detection, path validation, hoist
 │   ├── operator.ts    # Operator enum, Literal enum
 │   ├── expression.ts  # Expression interface, tokenizer, parseExpression()
 │   ├── resolve.ts     # Pass 1: Resolver class, TypedElement, FunctionRegistry
@@ -39,34 +40,47 @@ interface Tag {
   head: string;
   params: string | null;
   isKeyword: boolean;
+  raw: string;            // full matched text, e.g. "{{#if x}}"
 }
 ```
 Tag patterns matched: `/\{\{(#?\w+)(.*?)\}\}/g`
 
+Both `detectTags` (inline scanning) and `detectIsolatedTag` (whole-paragraph match) live in `tag.ts`.
+
 ### Element (`src/template/parser.ts`)
 ```ts
 interface Element {
+  id: number;             // start tag's ID (blocks) or own ID (simple)
   tag: Tag;
   children: Element[];
 }
+
+interface TagResult {
+  id: number;             // monotonically increasing per real tag; -1 for null
+  element: Element | null;
+}
 ```
-Pure template structure — no DOM references. The parser returns
-`Element | null` from `addTag`: the element for simple/end tags,
-`null` for start tags (scope opened) and null input.
+`addTag` returns a `TagResult`. ID semantics:
+- `(id: N, element: null)` — start tag, opened a scope.
+- `(id: N, element: { id: N })` — simple element, self-referencing.
+- `(id: N, element: { id: M })` — end tag (ID N), closing block started at ID M.
+- `(id: -1, element: null)` — null tag (plain content), no parser tracking.
 
 ### VirtualNode (`src/template/virtual-node.ts`)
 ```ts
 class VirtualNode {
   content: unknown;         // TreeNode | ParagraphView | Run
-  tag: Tag | null;
+  id: number;               // parser tag ID, or -1 for untagged
   element: Element | null;  // parser signal, when applicable
+  parent: VirtualNode | null;
   children: VirtualNode[];
 }
 ```
 Maps DOM structure to template structure. Produced by `TreeReader`
 (tree level) and `ParagraphReader` (inline level). The `content`
 field is the concrete DOM attachment point; `element` carries the
-parser's contextual signal for that position.
+parser's contextual signal for that position. Parent references are
+set by the constructor.
 
 ### TypedElement (`src/template/resolve.ts`)
 ```ts
@@ -108,18 +122,20 @@ type BaseType =
 3. `Run` — abstract text-bearing node interface
 4. Concrete implementations per tree type (dom/, docx/)
 
-**Tree regularisation pipeline** (`TreeReader` → `ParagraphReader` → `VirtualNode`):
+**Tree regularisation pipeline** (`TreeReader` → `ParagraphReader` → `VirtualNode` → `hoist`):
 - `TreeReader.classify(node)` recursively maps a `TreeNode` tree to a `VirtualNode` tree.
-  - Isolated tag paragraphs: single `VirtualNode` with tag/element populated.
+  - Isolated tag paragraphs: single `VirtualNode` with id/element populated.
   - Inline paragraphs: delegates to `ParagraphReader`, which maps each normalised run entry to a child `VirtualNode`.
   - Containers: recursed, producing nested `VirtualNode` subtrees.
 - Both readers own a `Parser` instance. `ParagraphReader` handles inline scope; `TreeReader` handles tree-level scope and splices paragraph-level elements via `addCollection`.
 - `result()` on either reader validates scope closure and returns the `Element` tree.
+- `findBoundaries` performs BFS over the `VirtualNode` tree, matching start/end boundary pairs with a per-level stack. Enforces equal depth (invariant #1) and correct nesting order.
+- `hoist` walks each boundary pair toward the lowest common ancestor via parent pointers, checking DOM tag equality (invariant #2) at each step, then copies id and element onto the ancestor-level endpoint nodes.
 
 **Other algorithms**:
-- Tag detection: regex-based in-order text scanning
+- Tag detection: regex-based in-order text scanning; `raw` field preserves matched text
 - Run normalization: queue-based with split/merge operations
-- Parsing: stack-based on-line parser for element tree
+- Parsing: stack-based on-line parser with monotonic ID assignment
 - Node projection: `DomNode` and `XmlNode` project every child element as a node (no transparent traversal); only paragraph detection is tag-specific
 - Static analysis (two-pass):
   1. Resolution (`resolve.ts`): Expression → TypedElement with function signatures
