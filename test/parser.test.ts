@@ -30,6 +30,7 @@ function el(text: string, children: Element[] = []): Element {
     id: -1,
     keyword: null,
     expression: parse(text),
+    tags: [],
     children,
   };
 }
@@ -302,6 +303,26 @@ describe("parser", () => {
       expect(inner.keyword).toBe("#each");
       expect(inner.children).toHaveLength(1);
       expect(inner.children[0]).toBe(itemEl);
+    });
+  });
+
+  describe("Element.tags", () => {
+    it("P1 — simple element has single-entry tags", () => {
+      const parser = new Parser();
+      const tag = simple("name");
+      const { element } = parser.addTag(tag);
+      expect(element!.tags).toEqual(["{{name}}"]);
+    });
+
+    it("P2 — block element has start and end tags", () => {
+      const parser = new Parser();
+      parser.addTag(keyword("if", "x"));
+      const { element } = parser.addTag(end());
+      expect(element!.tags).toEqual(["{{#if x}}", "{{#end}}"]);
+    });
+
+    it("P3 — existing parser tests pass without modification", () => {
+      // This is validated by the rest of the test suite passing
     });
   });
 

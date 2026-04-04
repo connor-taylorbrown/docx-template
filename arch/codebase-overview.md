@@ -51,7 +51,9 @@ Both `detectTags` (inline scanning) and `detectIsolatedTag` (whole-paragraph mat
 ```ts
 interface Element {
   id: number;             // start tag's ID (blocks) or own ID (simple)
-  tag: Tag;
+  keyword: string | null; // e.g. "#if", or null for simple elements
+  expression: Expression; // parsed expression from tag params
+  tags: string[];         // raw tag text: [raw] for simple, [startRaw, endRaw] for blocks
   children: Element[];
 }
 
@@ -69,7 +71,7 @@ interface TagResult {
 ### VirtualNode (`src/template/virtual-node.ts`)
 ```ts
 class VirtualNode {
-  content: unknown;         // TreeNode | ParagraphView | Run
+  content: ContentNode;     // TreeNode | ParagraphView | Run
   id: number;               // parser tag ID, or -1 for untagged
   element: Element | null;  // parser signal, when applicable
   parent: VirtualNode | null;
@@ -130,7 +132,7 @@ type BaseType =
 - Both readers own a `Parser` instance. `ParagraphReader` handles inline scope; `TreeReader` handles tree-level scope and splices paragraph-level elements via `addCollection`.
 - `result()` on either reader validates scope closure and returns the `Element` tree.
 - `findBoundaries` performs BFS over the `VirtualNode` tree, matching start/end boundary pairs with a per-level stack. Enforces equal depth (invariant #1) and correct nesting order.
-- `hoist` walks each boundary pair toward the lowest common ancestor via parent pointers, checking DOM tag equality (invariant #2) at each step, then copies id and element onto the ancestor-level endpoint nodes.
+- `hoist` walks each boundary pair toward the lowest common ancestor via parent pointers, checking DOM tag equality (invariant #2) and text-matches-raw-tag (invariant #3) at each step, then copies id and element onto the ancestor-level endpoint nodes. Invariant #3 ensures each ancestor's trimmed `text()` matches the trimmed raw tag text from `element.tags`, preventing hoisting through nodes that contain content beyond the tag.
 
 **Other algorithms**:
 - Tag detection: regex-based in-order text scanning; `raw` field preserves matched text
