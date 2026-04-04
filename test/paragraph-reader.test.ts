@@ -61,7 +61,7 @@ describe("ParagraphReader", () => {
 
       const child = vnode.children[0];
       expect(child.element).not.toBeNull();
-      expect(child.element!.expression.text!()).toBe("name");
+      expect(child.element!.expression.text!).toBe("name");
       expect(child.children).toHaveLength(0);
     });
 
@@ -77,7 +77,7 @@ describe("ParagraphReader", () => {
 
       // "{{name}}" — tagged
       expect(vnode.children[1].element).not.toBeNull();
-      expect(vnode.children[1].element!.expression.text!()).toBe("name");
+      expect(vnode.children[1].element!.expression.text!).toBe("name");
 
       // " world" — no tag
       expect(vnode.children[2].element).toBeNull();

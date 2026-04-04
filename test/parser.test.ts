@@ -48,7 +48,7 @@ describe("parser", () => {
 
       expect(element).not.toBeNull();
       expect(element!.keyword).toBeNull();
-      expect(element!.expression.text!()).toBe("name");
+      expect(element!.expression.text!).toBe("name");
       expect(element!.children).toHaveLength(0);
 
       const elements = parser.parse();
@@ -127,7 +127,7 @@ describe("parser", () => {
       const { element } = parser.addTag(simple("name"));
       expect(element).not.toBeNull();
       expect(element!.keyword).toBeNull();
-      expect(element!.expression.text!()).toBe("name");
+      expect(element!.expression.text!).toBe("name");
     });
 
     it("start tag returns null element", () => {
@@ -144,7 +144,7 @@ describe("parser", () => {
       const { element } = parser.addTag(end());
       expect(element).not.toBeNull();
       expect(element!.keyword).toBe("#if");
-      expect(element!.expression.text!()).toBe("x");
+      expect(element!.expression.text!).toBe("x");
     });
 
     it("null tag returns null element", () => {
@@ -164,7 +164,7 @@ describe("parser", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].keyword).toBe("#if");
-      expect(result[0].expression.text!()).toBe("x");
+      expect(result[0].expression.text!).toBe("x");
       expect(result[0].children).toEqual([]);
     });
 
@@ -179,7 +179,7 @@ describe("parser", () => {
       expect(result).toHaveLength(1);
       expect(result[0].children).toHaveLength(1);
       expect(result[0].children[0]).toBe(innerEl);
-      expect(result[0].children[0].expression.text!()).toBe("name");
+      expect(result[0].children[0].expression.text!).toBe("name");
     });
 
     it("block with spliced elements", () => {
@@ -309,7 +309,7 @@ describe("parser", () => {
     it("simple element preserves expression text", () => {
       const parser = new Parser();
       const { element } = parser.addTag(simple("name"));
-      expect(element!.expression.text!()).toBe("name");
+      expect(element!.expression.text!).toBe("name");
     });
 
     it("simple element with params preserves full text", () => {
@@ -319,14 +319,14 @@ describe("parser", () => {
       };
       const parser = new Parser();
       const { element } = parser.addTag(tag);
-      expect(element!.expression.text!()).toBe("fn x y");
+      expect(element!.expression.text!).toBe("fn x y");
     });
 
     it("keyword element preserves params as expression text", () => {
       const parser = new Parser();
       parser.addTag(keyword("if", "a > b"));
       const { element } = parser.addTag(end());
-      expect(element!.expression.text!()).toBe("a > b");
+      expect(element!.expression.text!).toBe("a > b");
     });
   });
 });

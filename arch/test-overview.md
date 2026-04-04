@@ -1,6 +1,6 @@
 # Test overview
 
-330 tests across 19 files. All tests use Vitest. DOM tests run in jsdom.
+333 tests across 20 files. All tests use Vitest. DOM tests run in jsdom.
 
 ## Pipeline coverage
 
@@ -28,7 +28,9 @@ TreeReader.classify ──► VirtualNode tree    ──► findBoundaries / hoi
 
 **End-to-end:** `e2e-analysis.test.ts` covers TreeReader → analyse (7 tests).
 The DOM smoke test (`dom/smoke.test.ts`) covers docx-preview → DomNode →
-TreeReader → Element output (2 tests).
+TreeReader → Element output (2 tests). The OOXML smoke test
+(`docx/smoke.test.ts`) covers readDocx → XmlNode → TreeReader → Element
+output (3 tests).
 
 ## Test files
 
@@ -69,6 +71,7 @@ TreeReader → Element output (2 tests).
 | `docx/paragraph.test.ts` | 8 | `XmlParagraphView` | text (w:t extraction, rPr skipping), runs, replaceChildren. |
 | `docx/run.test.ts` | 13 | `XmlRun` | length, split, merge across w:t nodes, formatting preservation. |
 | `docx/document.test.ts` | 3 | `readDocx` | Zip extraction, multi-component reading, missing component handling. |
+| `docx/smoke.test.ts` | 3 | readDocx → XmlNode → TreeReader | Full pipeline through OOXML parsing. Simple tag, block element, multi-component. |
 
 ### End-to-end
 
@@ -81,8 +84,8 @@ TreeReader → Element output (2 tests).
 - **Rendering pipeline:** no tests yet — rendering is not implemented.
 - **Invariant #3:** `hoist.test.ts` has a placeholder; enforcement pending
   the [invariant-3 feature](../arch/features/invariant-3.md).
-- **`Expression.text()`:** tested indirectly via parser tests
-  (`expression.text!()` assertions). No direct test of the non-enumerable
+- **`Expression.text`:** tested indirectly via parser tests
+  (`expression.text!` assertions). No direct test of the non-enumerable
   property mechanism, but breakage would surface through parser tests.
 - **`ContentNode.tagName()`:** tested indirectly through `hoist.test.ts`
   (invariant #2 uses `tagName()`), `dom/node.test.ts`, and

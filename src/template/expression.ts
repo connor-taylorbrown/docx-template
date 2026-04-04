@@ -8,7 +8,7 @@ export interface Expression {
   value: string | null;
   literal: Literal | null;
   /** Original source text. Set by parse() on the root expression (non-enumerable). */
-  text?(): string;
+  text?: string;
 }
 
 const PAREN = "(";
@@ -162,7 +162,7 @@ export function parse(input: string): Expression {
 
   const root = output[0];
   Object.defineProperty(root, "text", {
-    value: () => input,
+    value: input,
     enumerable: false,
   });
   return root;

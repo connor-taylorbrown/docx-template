@@ -277,3 +277,25 @@ Covers the full `TreeReader` → `analyse` pipeline using `TestTreeNode`:
 
 These tests verify that the parser's expression parsing produces the same
 analysis results that `analyse`'s own inline `parse()` calls produce today.
+
+### Addendum: OOXML smoke test (`test/docx/smoke.test.ts`)
+
+The DOM smoke test (`test/dom/smoke.test.ts`) covers `docx-preview →
+DomNode → TreeReader → Element`. There is no equivalent for the OOXML
+path. `docx/document.test.ts` tests `readDocx` in isolation (zip
+extraction, component listing) but never feeds its output into
+`TreeReader`.
+
+Add `test/docx/smoke.test.ts` to cover `readDocx → XmlNode → TreeReader →
+Element`, mirroring the DOM smoke test structure. Uses `buildDocx` from
+`docx/document.test.ts` (extract to shared helper or inline).
+
+| # | Case | Input | Expectation |
+|---|------|-------|-------------|
+| X1 | Simple tag | Single `<w:p>` with `<w:t>{{name}}</w:t>` | 1 element, `expression.text` is `"name"`, keyword is null |
+| X2 | Block element | `{{#if show}}` / body / `{{#end}}` across paragraphs | 1 element, keyword `"#if"`, has children |
+| X3 | Multi-component | Document body + header, each with a tag | Both components produce elements via separate `TreeReader` passes |
+
+X1 and X2 are structural mirrors of the DOM smoke tests. X3 exercises
+`readDocx`'s multi-component output, which has no DOM analogue (the DOM
+path renders a single container).

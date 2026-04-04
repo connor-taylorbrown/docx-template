@@ -128,7 +128,7 @@ describe("TreeReader", () => {
       const child = vnode.children[0];
       expect(child.content).toBe(p);
       expect(child.element).not.toBeNull();
-      expect(child.element!.expression.text!()).toBe("name");
+      expect(child.element!.expression.text!).toBe("name");
     });
 
     it("inline tag paragraph delegates to ParagraphReader", () => {
@@ -140,7 +140,7 @@ describe("TreeReader", () => {
       const paraNode = vnode.children[0];
       // ParagraphReader wraps paragraph: three children (text, tag, text)
       expect(paraNode.children).toHaveLength(3);
-      expect(paraNode.children[1].element!.expression.text!()).toBe("name");
+      expect(paraNode.children[1].element!.expression.text!).toBe("name");
     });
 
     it("container recursion", () => {
@@ -154,7 +154,7 @@ describe("TreeReader", () => {
       expect(containerChild.content).toBe(inner);
       expect(containerChild.element).toBeNull();
       expect(containerChild.children).toHaveLength(1);
-      expect(containerChild.children[0].element!.expression.text!()).toBe("name");
+      expect(containerChild.children[0].element!.expression.text!).toBe("name");
     });
   });
 
@@ -209,7 +209,7 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      expect(result[0].expression.text!()).toBe("name");
+      expect(result[0].expression.text!).toBe("name");
     });
 
     it("block structure", () => {
@@ -225,7 +225,7 @@ describe("TreeReader", () => {
       expect(result).toHaveLength(1);
       expect(result[0].keyword).toBe("#if");
       expect(result[0].children).toHaveLength(1);
-      expect(result[0].children[0].expression.text!()).toBe("name");
+      expect(result[0].children[0].expression.text!).toBe("name");
     });
 
     it("nested blocks", () => {
@@ -252,7 +252,7 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      expect(result[0].expression.text!()).toBe("name");
+      expect(result[0].expression.text!).toBe("name");
     });
   });
 

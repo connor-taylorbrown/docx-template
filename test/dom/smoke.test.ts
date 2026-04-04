@@ -62,7 +62,7 @@ describe("docx-preview smoke test", () => {
     const result = reader.result();
 
     expect(result).toHaveLength(1);
-    expect(result[0].expression.text!()).toBe("name");
+    expect(result[0].expression.text!).toBe("name");
   });
 
   it("detects a block element", async () => {

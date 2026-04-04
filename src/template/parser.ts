@@ -87,17 +87,6 @@ interface Scope {
 }
 
 /**
- * Build the expression text from a Tag. For keyword tags, the expression
- * is the params. For simple tags, it is head + params.
- */
-function expressionText(tag: Tag): string {
-  if (tag.isKeyword) {
-    return tag.params ?? "";
-  }
-  return tag.params ? `${tag.head} ${tag.params}` : tag.head;
-}
-
-/**
  * On-line, stack-based scope tracker. Builds an element tree from a
  * stream of tags and element collections. Parses expressions eagerly.
  */
@@ -140,11 +129,12 @@ export class Parser {
       this.current().push(element);
       return { id, element };
     } else if (tag.isKeyword) {
-      const expression = parseExpression(expressionText(tag));
+      const expression = parseExpression(tag.params ?? "");
       this.stack.push({ id, keyword: tag.head, expression, children: [] });
       return { id, element: null };
     } else {
-      const expression = parseExpression(expressionText(tag));
+      const text = tag.params ? `${tag.head} ${tag.params}` : tag.head;
+      const expression = parseExpression(text);
       const element: Element = { id, keyword: null, expression, children: [] };
       this.current().push(element);
       return { id, element };
