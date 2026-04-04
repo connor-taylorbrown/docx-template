@@ -1,10 +1,72 @@
-import { Tag } from "./tag.js";
+import { Expression, parse as parseExpression } from "./expression.js";
+
+// --- Tag type ---
+
+export interface Tag {
+  /** Text offset within the paragraph's concatenated text. */
+  offset: number;
+  /** Length of the full tag string (including {{ }}). */
+  length: number;
+  /** Head word, e.g. "name" for {{name}}, "#if" for {{#if ...}}. */
+  head: string;
+  /** Parameters (raw string after head word), if any. */
+  params: string | null;
+  /** Whether this is a keyword tag (head starts with #). */
+  isKeyword: boolean;
+  /** The full matched tag string, e.g. "{{#if x}}". */
+  raw: string;
+}
+
+const TAG_PATTERN = /\{\{(#?\w+)(.*?)\}\}/g;
+
+export function detectTags(text: string): Tag[] {
+  const tags: Tag[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = TAG_PATTERN.exec(text)) !== null) {
+    const head = match[1];
+    const params = match[2].trim() || null;
+    tags.push({
+      offset: match.index,
+      length: match[0].length,
+      head,
+      params,
+      isKeyword: head.startsWith("#"),
+      raw: match[0],
+    });
+  }
+  TAG_PATTERN.lastIndex = 0;
+  return tags;
+}
+
+const ISOLATED_PATTERN = /^\s*(\{\{(#?\w+)(.*?)\}\})\s*$/;
+
+/**
+ * Match trimmed paragraph text as exactly one tag. Whitespace-only
+ * content surrounding the tag is not visible after rendering, so the
+ * entire paragraph is owned by the tag.
+ */
+export function detectIsolatedTag(text: string): Tag | null {
+  const match = ISOLATED_PATTERN.exec(text);
+  if (!match) return null;
+  const raw = match[1];
+  const head = match[2];
+  const params = match[3].trim() || null;
+  return {
+    offset: match.index,
+    length: match[0].length,
+    head,
+    params,
+    isKeyword: head.startsWith("#"),
+    raw,
+  };
+}
 
 // --- Element type ---
 
 export interface Element {
   id: number;
-  tag: Tag;
+  keyword: string | null;
+  expression: Expression;
   children: Element[];
 }
 
@@ -19,13 +81,25 @@ export interface TagResult {
 
 interface Scope {
   id: number;
-  tag: Tag;
+  keyword: string;
+  expression: Expression;
   children: Element[];
 }
 
 /**
+ * Build the expression text from a Tag. For keyword tags, the expression
+ * is the params. For simple tags, it is head + params.
+ */
+function expressionText(tag: Tag): string {
+  if (tag.isKeyword) {
+    return tag.params ?? "";
+  }
+  return tag.params ? `${tag.head} ${tag.params}` : tag.head;
+}
+
+/**
  * On-line, stack-based scope tracker. Builds an element tree from a
- * stream of tags and element collections.
+ * stream of tags and element collections. Parses expressions eagerly.
  */
 export class Parser {
   private readonly root: Element[] = [];
@@ -59,16 +133,19 @@ export class Parser {
       }
       const element: Element = {
         id: scope.id,
-        tag: scope.tag,
+        keyword: scope.keyword,
+        expression: scope.expression,
         children: scope.children,
       };
       this.current().push(element);
       return { id, element };
     } else if (tag.isKeyword) {
-      this.stack.push({ id, tag, children: [] });
+      const expression = parseExpression(expressionText(tag));
+      this.stack.push({ id, keyword: tag.head, expression, children: [] });
       return { id, element: null };
     } else {
-      const element: Element = { id, tag, children: [] };
+      const expression = parseExpression(expressionText(tag));
+      const element: Element = { id, keyword: null, expression, children: [] };
       this.current().push(element);
       return { id, element };
     }
@@ -89,7 +166,7 @@ export class Parser {
     if (this.stack.length > 0) {
       const unclosed = this.stack[this.stack.length - 1];
       throw new SyntaxError(
-        `Unclosed block {{${unclosed.tag.head}}}`,
+        `Unclosed block {{${unclosed.keyword}}}`,
       );
     }
     return this.root;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { ReferenceMap } from "../src/template/reference-map.js";
-import type { TypeHint } from "../src/template/resolve.js";
+import { ReferenceMap } from "../src/analysis/reference-map.js";
+import type { TypeHint } from "../src/analysis/resolve.js";
 
 const str: TypeHint = { strong: false, type: { kind: "string" } };
 const num: TypeHint = { strong: true, type: { kind: "number" } };

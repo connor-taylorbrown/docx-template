@@ -1,5 +1,5 @@
-import { Literal, Operator } from "./operator.js";
-import type { Expression } from "./expression.js";
+import { Literal, Operator } from "../template/operator.js";
+import type { Expression } from "../template/expression.js";
 
 export type BaseType =
   | { kind: "string" }

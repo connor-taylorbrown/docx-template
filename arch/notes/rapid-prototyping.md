@@ -1,3 +1,7 @@
+---
+status: "cancelled"
+reason: "This is a brainstorming document. While many of its ideas are significant to the final implementation of the rendering pipeline, its approach to parser signalling and hoisting (described here as 'promotion') is awkward and overly coupled with the prototyping stage. The approach described in tree-regularisation.md is decidedly clearer, and has been adopted instead."
+---
 ## Rapid prototyping&mdash;high signal development
 - A rendering pipeline consists of three major components:
   - Template parser: reads the template, identifies the variables and the evaluation structure.

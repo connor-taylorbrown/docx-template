@@ -17,18 +17,22 @@ Template engine for DOCX documents. Parses `{{tag}}` syntax from document trees,
 ## Key Files
 
 ### Template core (`src/template/`)
-- `tag.ts` — `Tag` interface, `detectTags()` regex scanner
-- `parser.ts` — `Element` interface, stack-based `Parser` class
-- `inline.ts` — `ParagraphView` abstraction, `parseInline()` orchestrator
-- `normaliser.ts` — run normalization (aligns run boundaries to tag boundaries)
-- `run.ts` — abstract `Run` class (split/merge operations)
-- `tree-reader.ts` — abstract `TreeNode`, `TreeReader` recursive traversal
-- `document-node.ts` — `DocumentNode` base class
+- `document.ts` — `ContentNode` interface, abstract `TreeNode`, `ParagraphView`, `Run` (DOM abstraction surface)
+- `parser.ts` — `Tag` interface, `detectTags()`, `detectIsolatedTag()`, `Element` interface, stack-based `Parser` class (parses expressions eagerly)
+- `expression.ts` — `Expression` interface, tokenizer, `parse()` (attaches `text()` on root)
 - `operator.ts` — `Operator` enum, `Literal` enum
-- `expression.ts` — `Expression` interface, tokenizer, `parseExpression()`
+- `normaliser.ts` — run normalization (aligns run boundaries to tag boundaries)
+- `paragraph-reader.ts` — `ParagraphReader` inline classification
+- `tree-reader.ts` — `TreeReader` recursive traversal
+- `virtual-node.ts` — `VirtualNode` (typed `ContentNode` content)
+- `hoist.ts` — boundary detection and hoisting
+- `tag.ts` — re-exports from `parser.ts` (compatibility shim)
+- `run.ts` — re-exports from `document.ts` (compatibility shim)
+
+### Static analysis (`src/analysis/`)
+- `analyse.ts` — `resolveHint()`, `analyse()` orchestrator
 - `resolve.ts` — `Resolver` class, `TypedElement`, `FunctionRegistry`
 - `reference-map.ts` — `ReferenceMap` (scoped variable bindings)
-- `analyse.ts` — `resolveHint()`, `analyse()` orchestrator
 
 ### DOM implementation (`src/dom/`)
 - `node.ts`, `run.ts`, `paragraph.ts` — HTML element wrappers for docx-preview output
@@ -38,8 +42,9 @@ Template engine for DOCX documents. Parses `{{tag}}` syntax from document trees,
 - `document.ts` — `readDocx()` entry point
 
 ### Tests (`test/`)
-- Mirror `src/template/` with `.test.ts` files
-- `test-run.ts` — test helper: concrete `Run` implementation for testing
+- See `arch/test-overview.md` for full coverage analysis
+- `test-run.ts` — test helper: concrete `Run` implementation
+- `e2e-analysis.test.ts` — TreeReader → analyse pipeline tests
 - `test/dom/`, `test/docx/` — implementation-specific tests
 
 ## Architecture
@@ -47,3 +52,4 @@ Template engine for DOCX documents. Parses `{{tag}}` syntax from document trees,
 - See `arch/` for design documents
 - `arch/codebase-overview.md` — full structural overview with type hierarchy
 - `arch/analysis.md` — static analysis design (two-pass type hinting, ReferenceMap, element orchestration)
+- `arch/test-overview.md` — test suite analysis and coverage gaps

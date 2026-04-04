@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "../src/template/expression.js";
 import { Operator } from "../src/template/operator.js";
-import { Resolver, TypedElement, TypeHint, FunctionRegistry } from "../src/template/resolve.js";
+import { Resolver, TypedElement, TypeHint, FunctionRegistry } from "../src/analysis/resolve.js";
 
 function emptyRegistry(): FunctionRegistry {
   return { lookup: () => null };

@@ -1,5 +1,5 @@
 import { Tag } from "./tag.js";
-import { Run } from "./run.js";
+import { Run } from "./document.js";
 import { Queue } from "../queue.js";
 
 export interface NormalisedEntry {

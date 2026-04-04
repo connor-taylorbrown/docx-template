@@ -1,3 +1,7 @@
+---
+status: "cancelled"
+reason: "This is a brainstorming document. Some of its ideas influence the final implementation, but this does not serve as a functional guide."
+---
 ## Working through rendering
 - Each *variable* updates a series of *scopes.*
 - A scope is a structural element, identified by reference (read-only `RenderElement`).

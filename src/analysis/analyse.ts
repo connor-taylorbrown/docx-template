@@ -1,8 +1,7 @@
-import { Operator } from "./operator.js";
-import { parse } from "./expression.js";
+import { Operator } from "../template/operator.js";
 import type { TypeHint, TypedElement } from "./resolve.js";
 import type { Resolver } from "./resolve.js";
-import type { Element } from "./parser.js";
+import type { Element } from "../template/parser.js";
 import { ReferenceMap, assertCompatible } from "./reference-map.js";
 
 export { ReferenceMap } from "./reference-map.js";
@@ -122,11 +121,10 @@ export function analyse(
   refs: ReferenceMap,
   resolver: Resolver,
 ): void {
-  const { tag } = element;
+  const { keyword, expression } = element;
 
-  if (!tag.isKeyword) {
-    const expr = parse(tag.head + (tag.params ? " " + tag.params : ""));
-    const typed = resolver.resolve(expr);
+  if (keyword === null) {
+    const typed = resolver.resolve(expression);
     resolveHint(typed, WEAK_STR, refs);
     for (const child of element.children) {
       analyse(child, refs, resolver);
@@ -134,10 +132,9 @@ export function analyse(
     return;
   }
 
-  switch (tag.head) {
+  switch (keyword) {
     case "#if": {
-      const expr = parse(tag.params!);
-      const typed = resolver.resolve(expr);
+      const typed = resolver.resolve(expression);
       resolveHint(typed, BOOL, refs);
       for (const child of element.children) {
         analyse(child, refs, resolver);
@@ -146,13 +143,11 @@ export function analyse(
     }
 
     case "#each": {
-      const expr = parse(tag.params!);
-
-      if (expr.operator !== Operator.IN) {
+      if (expression.operator !== Operator.IN) {
         throw new Error("#each requires 'in' expression");
       }
 
-      const [declaration, collection] = expr.operands;
+      const [declaration, collection] = expression.operands;
 
       if (declaration.operator !== null) {
         throw new Error("#each declaration must be a plain name");
@@ -180,6 +175,6 @@ export function analyse(
     }
 
     default:
-      throw new Error(`Unsupported keyword: ${tag.head}`);
+      throw new Error(`Unsupported keyword: ${keyword}`);
   }
 }

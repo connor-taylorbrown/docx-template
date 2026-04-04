@@ -1,12 +1,20 @@
 import { describe, it, expect } from "vitest";
+import { ContentNode } from "../src/template/document.js";
 import { VirtualNode } from "../src/template/virtual-node.js";
 import { Element } from "../src/template/parser.js";
 import { Tag } from "../src/template/tag.js";
+import { parse } from "../src/template/expression.js";
 import { findBoundaries, hoist } from "../src/template/hoist.js";
 
 function tag(head: string, params: string | null = null): Tag {
   const raw = `{{${head}${params ? " " + params : ""}}}`;
   return { offset: 0, length: raw.length, head, params, isKeyword: head.startsWith("#"), raw };
+}
+
+function mkElement(t: Tag): Element {
+  const keyword = t.isKeyword ? t.head : null;
+  const text = t.isKeyword ? (t.params ?? "") : t.head;
+  return { id: 0, keyword, expression: parse(text), children: [] };
 }
 
 let nextId = 0;
@@ -15,9 +23,13 @@ function resetIds(): void {
   nextId = 0;
 }
 
-/** Labelled content for invariant #2 checks. */
-interface Label { tag: string }
-function label(tag: string): Label { return { tag }; }
+/** ContentNode with a DOM-like tag name. */
+function label(domTag: string): ContentNode {
+  return { text: () => "", tagName: () => domTag };
+}
+
+/** ContentNode with no tag name. */
+const noContent: ContentNode = { text: () => "", tagName: () => null };
 
 /** Container node with a DOM-like label. */
 function container(domTag: string, ...children: VirtualNode[]): VirtualNode {
@@ -26,7 +38,7 @@ function container(domTag: string, ...children: VirtualNode[]): VirtualNode {
 
 /** Container node with no label. */
 function root(...children: VirtualNode[]): VirtualNode {
-  return new VirtualNode({ content: null, id: -1, element: null, children });
+  return new VirtualNode({ content: noContent, id: -1, element: null, children });
 }
 
 /** Start tag node: element is null, id is assigned. */
@@ -39,20 +51,22 @@ function start(t: Tag, domTag = "p"): { node: VirtualNode; id: number } {
 /** End tag node: element carries the start tag's id. */
 function end(startId: number, t: Tag, domTag = "p"): VirtualNode {
   const id = nextId++;
-  const element: Element = { id: startId, tag: t, children: [] };
+  const element = mkElement(t);
+  element.id = startId;
   return new VirtualNode({ content: label(domTag), id, element, children: [] });
 }
 
 /** Simple element node: element.id === node.id. */
 function simple(t: Tag): VirtualNode {
   const id = nextId++;
-  const element: Element = { id, tag: t, children: [] };
-  return new VirtualNode({ content: null, id, element, children: [] });
+  const element = mkElement(t);
+  element.id = id;
+  return new VirtualNode({ content: noContent, id, element, children: [] });
 }
 
 /** Plain content node (no tag). */
 function plain(): VirtualNode {
-  return new VirtualNode({ content: null, id: -1, element: null, children: [] });
+  return new VirtualNode({ content: noContent, id: -1, element: null, children: [] });
 }
 
 describe("findBoundaries", () => {
@@ -211,20 +225,17 @@ describe("hoist", () => {
     });
   });
 
-  describe("invariant #3: node text matches raw tag", () => {
+  describe("invariant #3: node text matches raw tag (placeholder)", () => {
     it("3.1 — clean isolated tag passes", () => {
       resetIds();
       const ifTag = tag("#if", "x");
-      // Start node text is the tag raw text
       const s = start(ifTag);
-      (s.node as VirtualNode & { content: Label }).content = { tag: "p", text: "{{#if x}}" } as unknown as Label;
       const e = end(s.id, ifTag);
-      (e as VirtualNode & { content: unknown }).content = { tag: "p", text: "{{#end}}" };
 
       const r = root(s.node, e);
 
       const pairs = findBoundaries(r);
-      // Siblings — no path to walk, just boundary text check
+      // Siblings — no path to walk; invariant #3 enforcement is pending
       expect(() => hoist(pairs)).not.toThrow();
     });
   });

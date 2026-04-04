@@ -17,12 +17,12 @@ function tag(offset: number, length: number, head = "x"): Tag {
 
 /** Extract text content from normalised entries for assertion readability. */
 function texts(entries: NormalisedEntry[]): string[] {
-  return entries.map((e) => (e.content as TestRun).text);
+  return entries.map((e) => (e.content as TestRun).text());
 }
 
 /** Extract (text, hasTag) tuples. */
 function summary(entries: NormalisedEntry[]): [string, boolean][] {
-  return entries.map((e) => [(e.content as TestRun).text, e.tag !== null]);
+  return entries.map((e) => [(e.content as TestRun).text(), e.tag !== null]);
 }
 
 describe("normaliser", () => {

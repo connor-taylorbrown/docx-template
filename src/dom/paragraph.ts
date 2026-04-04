@@ -1,5 +1,4 @@
-import { Run } from "../template/run.js";
-import { ParagraphView } from "../template/paragraph-reader.js";
+import { Run, ParagraphView } from "../template/document.js";
 import { DomRun } from "./run.js";
 
 /**
@@ -13,6 +12,10 @@ export class DomParagraphView extends ParagraphView {
 
   text(): string {
     return this.element.textContent ?? "";
+  }
+
+  tagName(): string | null {
+    return this.element.tagName;
   }
 
   runs(): Run[] {

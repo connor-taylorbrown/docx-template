@@ -1,3 +1,7 @@
+---
+status: "rejected"
+reason: "Template signalling and consistency rules have been enforced using an alternative method, described in tree-regularisation.md."
+---
 ## Building a virtual DOM
 The goal of the *prototyping stage* of rendering is to build out a stable virtual DOM, to serve as the basis of all future rendering passes on this template version. The virtual DOM is **comprehensive:** all actual DOM nodes are reachable from its root. It is also **consistent** with two underlying structures:
 - *DOM consistency:* Each actual node in the virtual DOM is a descendant of its actual parent.

@@ -58,11 +58,10 @@ export function findBoundaries(root: VirtualNode): BoundaryPair[] {
 }
 
 /**
- * Extract the DOM tag name from a VirtualNode's content, if present.
+ * Extract the DOM tag name from a VirtualNode's content.
  */
 function domTag(node: VirtualNode): string | null {
-  const content = node.content as { tag?: string } | null;
-  return content?.tag ?? null;
+  return node.content.tagName();
 }
 
 /**

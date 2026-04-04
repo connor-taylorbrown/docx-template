@@ -1,3 +1,4 @@
+import type { ContentNode } from "./document.js";
 import type { Element } from "./parser.js";
 
 /**
@@ -6,7 +7,7 @@ import type { Element } from "./parser.js";
  */
 export class VirtualNode {
   /** The DOM content: a TreeNode, ParagraphView, or Run. */
-  readonly content: unknown;
+  readonly content: ContentNode;
   /** Parser-assigned tag ID. */
   id: number;
   /** The parser element, if the parser produced one at this position. */
@@ -17,7 +18,7 @@ export class VirtualNode {
   readonly children: VirtualNode[];
 
   constructor(opts: {
-    content: unknown;
+    content: ContentNode;
     id: number;
     element: Element | null;
     children: VirtualNode[];

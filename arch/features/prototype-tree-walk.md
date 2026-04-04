@@ -1,3 +1,7 @@
+---
+status: "rejected"
+reason: "Dependent on promotion.md, which has been superseded by notes/tree-regularisation.md"
+---
 # Prototype tree walk
 
 Builds a virtual DOM from a document tree, linking virtual nodes to prototypes. The virtual DOM is a sparse overlay on the actual DOM: paragraph nodes and virtual nodes are span entries; containers provide traversal structure but are not span entries themselves. The parser serves as a signalling system: its on-line return values tell the walk when to open and close virtual nodes.

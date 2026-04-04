@@ -1,4 +1,4 @@
-import { Run } from "../template/run.js";
+import { Run } from "../template/document.js";
 
 /**
  * Concrete Run backed by an HTML <span> element from docx-preview
@@ -13,6 +13,14 @@ export class DomRun extends Run {
   /** The underlying span element. */
   get el(): HTMLSpanElement {
     return this.element;
+  }
+
+  text(): string {
+    return this.element.textContent ?? "";
+  }
+
+  tagName(): string | null {
+    return this.element.tagName;
   }
 
   get length(): number {

@@ -1,22 +1,10 @@
-import { Run } from "./run.js";
+import { ParagraphView } from "./document.js";
 import { detectTags } from "./tag.js";
 import { normalise } from "./normaliser.js";
 import { Parser, Element } from "./parser.js";
 import { VirtualNode } from "./virtual-node.js";
 
-/**
- * Abstract view over a paragraph node, independent of tree type (XML vs. DOM).
- */
-export abstract class ParagraphView {
-  /** Concatenated text content of the paragraph. */
-  abstract text(): string;
-
-  /** The paragraph's runs, in document order. */
-  abstract runs(): Run[];
-
-  /** Replace the paragraph's children with the given runs. */
-  abstract replaceChildren(runs: Run[]): void;
-}
+export { ParagraphView } from "./document.js";
 
 /**
  * Classifies a paragraph's inline content into a VirtualNode tree.

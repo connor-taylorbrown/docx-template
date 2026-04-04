@@ -7,6 +7,8 @@ export interface Expression {
   operands: Expression[];
   value: string | null;
   literal: Literal | null;
+  /** Original source text. Set by parse() on the root expression (non-enumerable). */
+  text?(): string;
 }
 
 const PAREN = "(";
@@ -158,5 +160,10 @@ export function parse(input: string): Expression {
     popOperator(output, ops);
   }
 
-  return output[0];
+  const root = output[0];
+  Object.defineProperty(root, "text", {
+    value: () => input,
+    enumerable: false,
+  });
+  return root;
 }

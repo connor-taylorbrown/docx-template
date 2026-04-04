@@ -62,7 +62,7 @@ describe("docx-preview smoke test", () => {
     const result = reader.result();
 
     expect(result).toHaveLength(1);
-    expect(result[0].tag.head).toBe("name");
+    expect(result[0].expression.text!()).toBe("name");
   });
 
   it("detects a block element", async () => {
@@ -79,7 +79,7 @@ describe("docx-preview smoke test", () => {
     const result = reader.result();
 
     expect(result).toHaveLength(1);
-    expect(result[0].tag.head).toBe("#if");
+    expect(result[0].keyword).toBe("#if");
     expect(result[0].children).toBeDefined();
   });
 });

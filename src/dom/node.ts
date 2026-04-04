@@ -1,5 +1,4 @@
-import { ParagraphView } from "../template/paragraph-reader.js";
-import { TreeNode } from "../template/tree-reader.js";
+import { ParagraphView, TreeNode } from "../template/document.js";
 import { DomParagraphView } from "./paragraph.js";
 
 /**
@@ -34,6 +33,10 @@ export class DomNode extends TreeNode {
 
   text(): string {
     return this.element.textContent ?? "";
+  }
+
+  tagName(): string | null {
+    return this.element.tagName;
   }
 
   paragraphView(): ParagraphView {

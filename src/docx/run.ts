@@ -1,4 +1,4 @@
-import { Run } from "../template/run.js";
+import { Run } from "../template/document.js";
 
 const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
@@ -31,6 +31,16 @@ export class XmlRun extends Run {
   /** The underlying XML element. */
   get el(): Element {
     return this.element;
+  }
+
+  text(): string {
+    return collectTextNodes(this.element)
+      .map((t) => t.textContent ?? "")
+      .join("");
+  }
+
+  tagName(): string | null {
+    return this.element.localName;
   }
 
   get length(): number {

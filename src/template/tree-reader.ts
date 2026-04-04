@@ -1,26 +1,10 @@
+import { TreeNode } from "./document.js";
 import { detectIsolatedTag } from "./tag.js";
 import { Parser, Element } from "./parser.js";
-import { ParagraphView, ParagraphReader } from "./paragraph-reader.js";
+import { ParagraphReader } from "./paragraph-reader.js";
 import { VirtualNode } from "./virtual-node.js";
 
-/**
- * Abstract view of a document tree node. Leaf nodes are paragraphs;
- * non-leaf nodes are containers (body, table cell, etc.).
- * Implementations differ by tree type (XML vs. DOM).
- */
-export abstract class TreeNode {
-  /** Child nodes in document order. Empty for paragraphs. */
-  abstract children(): TreeNode[];
-
-  /** Whether this node is a paragraph (leaf for classification). */
-  abstract isParagraph(): boolean;
-
-  /** Concatenated text content. Only valid for paragraphs. */
-  abstract text(): string;
-
-  /** Create a ParagraphView for inline parsing. Only valid for paragraphs. */
-  abstract paragraphView(): ParagraphView;
-}
+export { TreeNode } from "./document.js";
 
 /**
  * Recursive document tree reader. Traverses a document tree in order,

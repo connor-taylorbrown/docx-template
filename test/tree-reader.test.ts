@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { ParagraphView } from "../src/template/paragraph-reader.js";
-import { Run } from "../src/template/run.js";
-import { TreeReader, TreeNode } from "../src/template/tree-reader.js";
+import { ParagraphView, Run, TreeNode } from "../src/template/document.js";
+import { TreeReader } from "../src/template/tree-reader.js";
 import { VirtualNode } from "../src/template/virtual-node.js";
 import { TestRun } from "./test-run.js";
 
@@ -15,7 +14,11 @@ class TestParagraphView extends ParagraphView {
   }
 
   text(): string {
-    return this._runs.map((r) => r.text).join("");
+    return this._runs.map((r) => r.text()).join("");
+  }
+
+  tagName(): string | null {
+    return "p";
   }
 
   runs(): Run[] {
@@ -49,7 +52,7 @@ class TestTreeNode extends TreeNode {
       this._children = [];
       this._isParagraph = true;
       const runs = opts.runs ?? [new TestRun(opts.text ?? "")];
-      this._text = runs.map((r) => r.text).join("");
+      this._text = runs.map((r) => r.text()).join("");
       this._view = new TestParagraphView(runs);
     }
   }
@@ -64,6 +67,10 @@ class TestTreeNode extends TreeNode {
 
   text(): string {
     return this._text;
+  }
+
+  tagName(): string | null {
+    return this._isParagraph ? "p" : "div";
   }
 
   paragraphView(): ParagraphView {
@@ -121,7 +128,7 @@ describe("TreeReader", () => {
       const child = vnode.children[0];
       expect(child.content).toBe(p);
       expect(child.element).not.toBeNull();
-      expect(child.element!.tag.head).toBe("name");
+      expect(child.element!.expression.text!()).toBe("name");
     });
 
     it("inline tag paragraph delegates to ParagraphReader", () => {
@@ -133,7 +140,7 @@ describe("TreeReader", () => {
       const paraNode = vnode.children[0];
       // ParagraphReader wraps paragraph: three children (text, tag, text)
       expect(paraNode.children).toHaveLength(3);
-      expect(paraNode.children[1].element!.tag.head).toBe("name");
+      expect(paraNode.children[1].element!.expression.text!()).toBe("name");
     });
 
     it("container recursion", () => {
@@ -147,7 +154,7 @@ describe("TreeReader", () => {
       expect(containerChild.content).toBe(inner);
       expect(containerChild.element).toBeNull();
       expect(containerChild.children).toHaveLength(1);
-      expect(containerChild.children[0].element!.tag.head).toBe("name");
+      expect(containerChild.children[0].element!.expression.text!()).toBe("name");
     });
   });
 
@@ -202,7 +209,7 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      expect(result[0].tag.head).toBe("name");
+      expect(result[0].expression.text!()).toBe("name");
     });
 
     it("block structure", () => {
@@ -216,9 +223,9 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      expect(result[0].tag.head).toBe("#if");
+      expect(result[0].keyword).toBe("#if");
       expect(result[0].children).toHaveLength(1);
-      expect(result[0].children[0].tag.head).toBe("name");
+      expect(result[0].children[0].expression.text!()).toBe("name");
     });
 
     it("nested blocks", () => {
@@ -233,9 +240,9 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      expect(result[0].tag.head).toBe("#if");
+      expect(result[0].keyword).toBe("#if");
       expect(result[0].children).toHaveLength(1);
-      expect(result[0].children[0].tag.head).toBe("#each");
+      expect(result[0].children[0].keyword).toBe("#each");
     });
 
     it("inline tags split across runs", () => {
@@ -245,7 +252,7 @@ describe("TreeReader", () => {
       const result = r.result();
 
       expect(result).toHaveLength(1);
-      expect(result[0].tag.head).toBe("name");
+      expect(result[0].expression.text!()).toBe("name");
     });
   });
 

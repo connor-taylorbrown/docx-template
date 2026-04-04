@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { Run } from "../src/template/run.js";
-import { ParagraphView, ParagraphReader } from "../src/template/paragraph-reader.js";
+import { Run, ParagraphView } from "../src/template/document.js";
+import { ParagraphReader } from "../src/template/paragraph-reader.js";
 import { TestRun } from "./test-run.js";
 
 /** Concrete ParagraphView backed by TestRuns. */
@@ -13,7 +13,11 @@ class TestParagraph extends ParagraphView {
   }
 
   text(): string {
-    return this._runs.map((r) => r.text).join("");
+    return this._runs.map((r) => r.text()).join("");
+  }
+
+  tagName(): string | null {
+    return "p";
   }
 
   runs(): Run[] {
@@ -57,7 +61,7 @@ describe("ParagraphReader", () => {
 
       const child = vnode.children[0];
       expect(child.element).not.toBeNull();
-      expect(child.element!.tag.head).toBe("name");
+      expect(child.element!.expression.text!()).toBe("name");
       expect(child.children).toHaveLength(0);
     });
 
@@ -73,7 +77,7 @@ describe("ParagraphReader", () => {
 
       // "{{name}}" — tagged
       expect(vnode.children[1].element).not.toBeNull();
-      expect(vnode.children[1].element!.tag.head).toBe("name");
+      expect(vnode.children[1].element!.expression.text!()).toBe("name");
 
       // " world" — no tag
       expect(vnode.children[2].element).toBeNull();
@@ -104,7 +108,7 @@ describe("ParagraphReader", () => {
       // End tag: element is the completed block
       const endChild = vnode.children[vnode.children.length - 1];
       expect(endChild.element).not.toBeNull();
-      expect(endChild.element!.tag.head).toBe("#if");
+      expect(endChild.element!.keyword).toBe("#if");
     });
 
     it("result validates block structure", () => {
@@ -116,7 +120,7 @@ describe("ParagraphReader", () => {
       const elements = reader.result();
 
       expect(elements).toHaveLength(1);
-      expect(elements[0].tag.head).toBe("#if");
+      expect(elements[0].keyword).toBe("#if");
     });
   });
 

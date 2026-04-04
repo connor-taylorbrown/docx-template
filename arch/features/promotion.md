@@ -1,3 +1,7 @@
+---
+status: "rejected"
+reason: "Superseded by notes/tree-regularisation.md, which is a significantly clearer, less error-prone design for enforcing render-time invariants."
+---
 # Promotion
 
 Promotion resolves the case where a block element's boundary tags appear inside nested containers rather than as siblings. The virtual node is created speculatively when the parser signals "start," then invalidated and hoisted through each container exit until the scope closes.

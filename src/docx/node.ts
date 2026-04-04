@@ -1,5 +1,4 @@
-import { ParagraphView } from "../template/paragraph-reader.js";
-import { TreeNode } from "../template/tree-reader.js";
+import { ParagraphView, TreeNode } from "../template/document.js";
 import { XmlParagraphView } from "./paragraph.js";
 
 /** OOXML namespace URI. */
@@ -38,6 +37,10 @@ export class XmlNode extends TreeNode {
 
   text(): string {
     return new XmlParagraphView(this.element).text();
+  }
+
+  tagName(): string | null {
+    return this.element.localName;
   }
 
   paragraphView(): ParagraphView {
