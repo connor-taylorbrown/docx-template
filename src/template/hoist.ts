@@ -61,6 +61,7 @@ export function findBoundaries(root: VirtualNode): BoundaryPair[] {
  * Extract the DOM tag name from a VirtualNode's content.
  */
 function domTag(node: VirtualNode): string | null {
+  if (node.content === null) return null;
   return node.content.tagName();
 }
 

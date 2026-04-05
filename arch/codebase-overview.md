@@ -13,6 +13,7 @@ src/
 │   ├── virtual-node.ts # VirtualNode (DOM-to-template mapping)
 │   ├── paragraph-reader.ts # ParagraphView, ParagraphReader class
 │   ├── hoist.ts       # BFS boundary detection, path validation, hoist
+│   ├── span-parser.ts # SpanParser class, prototype() tree walk
 │   ├── operator.ts    # Operator enum, Literal enum
 │   ├── expression.ts  # Expression interface, tokenizer, parseExpression()
 │   ├── resolve.ts     # Pass 1: Resolver class, TypedElement, FunctionRegistry
@@ -69,7 +70,7 @@ interface TagResult {
 ### VirtualNode (`src/template/virtual-node.ts`)
 ```ts
 class VirtualNode {
-  content: unknown;         // TreeNode | ParagraphView | Run
+  content: ContentNode | null; // TreeNode | ParagraphView | Run, or null for prototype blocks
   id: number;               // parser tag ID, or -1 for untagged
   element: Element | null;  // parser signal, when applicable
   parent: VirtualNode | null;
@@ -78,9 +79,15 @@ class VirtualNode {
 ```
 Maps DOM structure to template structure. Produced by `TreeReader`
 (tree level) and `ParagraphReader` (inline level). The `content`
-field is the concrete DOM attachment point; `element` carries the
-parser's contextual signal for that position. Parent references are
-set by the constructor.
+field is the concrete DOM attachment point (null for prototype block
+nodes created by `SpanParser`); `element` carries the parser's
+contextual signal for that position. Parent references are set by
+the constructor.
+
+After prototyping, three structurally distinct node kinds exist:
+- **Content nodes:** `content !== null`, `element === null`, `id < 0` — plain document content.
+- **Simple elements:** `content !== null`, `element.id === node.id` — leaf expressions.
+- **Block elements:** `content === null`, `element !== null` — composed by `SpanParser`, children are interior content.
 
 ### TypedElement (`src/template/resolve.ts`)
 ```ts
@@ -122,7 +129,7 @@ type BaseType =
 3. `Run` — abstract text-bearing node interface
 4. Concrete implementations per tree type (dom/, docx/)
 
-**Tree regularisation pipeline** (`TreeReader` → `ParagraphReader` → `VirtualNode` → `hoist`):
+**Tree regularisation pipeline** (`TreeReader` → `ParagraphReader` → `VirtualNode` → `hoist` → `prototype`):
 - `TreeReader.classify(node)` recursively maps a `TreeNode` tree to a `VirtualNode` tree.
   - Isolated tag paragraphs: single `VirtualNode` with id/element populated.
   - Inline paragraphs: delegates to `ParagraphReader`, which maps each normalised run entry to a child `VirtualNode`.
@@ -131,6 +138,7 @@ type BaseType =
 - `result()` on either reader validates scope closure and returns the `Element` tree.
 - `findBoundaries` performs BFS over the `VirtualNode` tree, matching start/end boundary pairs with a per-level stack. Enforces equal depth (invariant #1) and correct nesting order.
 - `hoist` walks each boundary pair toward the lowest common ancestor via parent pointers, checking DOM tag equality (invariant #2) at each step, then copies id and element onto the ancestor-level endpoint nodes.
+- `prototype` (in `span-parser.ts`) performs post-order traversal, applying `SpanParser` at each level. `SpanParser` consumes start/end boundary pairs from the flat sibling list and replaces each span with a single `VirtualNode` whose children are the interior nodes. Boundary nodes are consumed; the result is a tree where all parser signals are resolved into structure.
 
 **Other algorithms**:
 - Tag detection: regex-based in-order text scanning; `raw` field preserves matched text
