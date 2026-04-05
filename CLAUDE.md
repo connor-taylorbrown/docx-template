@@ -21,6 +21,16 @@ Template engine for DOCX documents. Parses `{{tag}}` syntax from document trees,
 - `arch/` docs updated if behaviour or structure changed
 - Changes committed to a branch (not `main`)
 
+## Planning
+
+When asked to plan a feature, write a feature doc in `arch/features/`. Structure:
+
+1. **Summary** — what and why, in a paragraph
+2. **Justification** — why this matters; what breaks or degrades without it
+3. **Changes** — concrete, enumerated modifications to the codebase
+4. **Pseudocode** — key algorithms or logic sketched in TypeScript
+5. **Test plan** — table of cases grouped by concern, with expectations
+
 ## Architecture
 
 - `arch/codebase-overview.md` — structural overview with type hierarchy

@@ -1,3 +1,6 @@
+---
+status: "completed"
+---
 # Template rework
 
 Consolidation of three related concerns into a single structural change,
