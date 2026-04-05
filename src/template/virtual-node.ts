@@ -6,8 +6,8 @@ import type { Element } from "./parser.js";
  * structure, carrying parser signals in context.
  */
 export class VirtualNode {
-  /** The DOM content: a TreeNode, ParagraphView, or Run. */
-  readonly content: ContentNode;
+  /** The DOM content: a TreeNode, ParagraphView, or Run. Null for prototype block nodes. */
+  readonly content: ContentNode | null;
   /** Parser-assigned tag ID. */
   id: number;
   /** The parser element, if the parser produced one at this position. */
@@ -18,7 +18,7 @@ export class VirtualNode {
   readonly children: VirtualNode[];
 
   constructor(opts: {
-    content: ContentNode;
+    content: ContentNode | null;
     id: number;
     element: Element | null;
     children: VirtualNode[];
