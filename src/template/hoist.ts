@@ -74,6 +74,7 @@ function domTag(node: VirtualNode): string | null {
 function hoistPair(pair: BoundaryPair): void {
   let startNode = pair.start;
   let endNode = pair.end;
+  const [startRaw, endRaw] = pair.element.tags.map(t => t.trim());
 
   // Walk up until parents are identical
   while (startNode.parent !== endNode.parent) {
@@ -87,6 +88,18 @@ function hoistPair(pair: BoundaryPair): void {
     if (domTag(sp) !== domTag(ep)) {
       throw new SyntaxError(
         `Block boundary DOM tag mismatch: ${domTag(sp)} vs ${domTag(ep)}`,
+      );
+    }
+
+    // Invariant #3: text must exclusively match raw tag
+    if (sp.content.text().trim() !== startRaw) {
+      throw new SyntaxError(
+        "Block boundary contains content beyond the start tag",
+      );
+    }
+    if (ep.content.text().trim() !== endRaw) {
+      throw new SyntaxError(
+        "Block boundary contains content beyond the end tag",
       );
     }
 

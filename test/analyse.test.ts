@@ -431,6 +431,7 @@ function el(keyword: string | null, expr: string, children: Element[] = []): Ele
     id: nextId++,
     keyword,
     expression: parse(expr),
+    tags: [],
     children,
   };
 }

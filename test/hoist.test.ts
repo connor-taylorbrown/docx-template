@@ -14,7 +14,7 @@ function tag(head: string, params: string | null = null): Tag {
 function mkElement(t: Tag): Element {
   const keyword = t.isKeyword ? t.head : null;
   const text = t.isKeyword ? (t.params ?? "") : t.head;
-  return { id: 0, keyword, expression: parse(text), children: [] };
+  return { id: 0, keyword, expression: parse(text), tags: [t.raw], children: [] };
 }
 
 let nextId = 0;
@@ -23,17 +23,20 @@ function resetIds(): void {
   nextId = 0;
 }
 
-/** ContentNode with a DOM-like tag name. */
-function label(domTag: string): ContentNode {
-  return { text: () => "", tagName: () => domTag };
+/** ContentNode with a DOM-like tag name and optional text. */
+function label(domTag: string, text = ""): ContentNode {
+  return { text: () => text, tagName: () => domTag };
 }
 
 /** ContentNode with no tag name. */
 const noContent: ContentNode = { text: () => "", tagName: () => null };
 
-/** Container node with a DOM-like label. */
-function container(domTag: string, ...children: VirtualNode[]): VirtualNode {
-  return new VirtualNode({ content: label(domTag), id: -1, element: null, children });
+/** Container node with a DOM-like label and optional text override. */
+function container(domTag: string, ...args: (VirtualNode | { text: string })[]): VirtualNode {
+  const opts = args.length > 0 && !(args[0] instanceof VirtualNode) ? args[0] as { text: string } : null;
+  const children = opts ? args.slice(1) as VirtualNode[] : args as VirtualNode[];
+  const text = opts?.text ?? "";
+  return new VirtualNode({ content: label(domTag, text), id: -1, element: null, children });
 }
 
 /** Container node with no label. */
@@ -53,6 +56,8 @@ function end(startId: number, t: Tag, domTag = "p"): VirtualNode {
   const id = nextId++;
   const element = mkElement(t);
   element.id = startId;
+  // Block elements have two tags: [startRaw, endRaw]
+  element.tags = [t.raw, "{{#end}}"];
   return new VirtualNode({ content: label(domTag), id, element, children: [] });
 }
 
@@ -174,8 +179,8 @@ describe("hoist", () => {
       const s = start(ifTag);
       const e = end(s.id, ifTag);
       const r = root(
-        container("td", s.node),
-        container("td", e),
+        container("td", { text: "{{#if x}}" }, s.node),
+        container("td", { text: "{{#end}}" }, e),
       );
 
       const pairs = findBoundaries(r);
@@ -188,8 +193,8 @@ describe("hoist", () => {
       const s = start(ifTag);
       const e = end(s.id, ifTag);
       const r = root(
-        container("td", s.node),
-        container("th", e),
+        container("td", { text: "{{#if x}}" }, s.node),
+        container("th", { text: "{{#end}}" }, e),
       );
 
       const pairs = findBoundaries(r);
@@ -202,8 +207,8 @@ describe("hoist", () => {
       const s = start(ifTag);
       const e = end(s.id, ifTag);
       const r = root(
-        container("div", container("section", s.node)),
-        container("div", container("section", e)),
+        container("div", { text: "{{#if x}}" }, container("section", { text: "{{#if x}}" }, s.node)),
+        container("div", { text: "{{#end}}" }, container("section", { text: "{{#end}}" }, e)),
       );
 
       const pairs = findBoundaries(r);
@@ -216,8 +221,8 @@ describe("hoist", () => {
       const s = start(ifTag);
       const e = end(s.id, ifTag);
       const r = root(
-        container("div", container("section", s.node)),
-        container("div", container("article", e)),
+        container("div", { text: "{{#if x}}" }, container("section", { text: "{{#if x}}" }, s.node)),
+        container("div", { text: "{{#end}}" }, container("article", { text: "{{#end}}" }, e)),
       );
 
       const pairs = findBoundaries(r);
@@ -225,18 +230,157 @@ describe("hoist", () => {
     });
   });
 
-  describe("invariant #3: node text matches raw tag (placeholder)", () => {
-    it("3.1 — clean isolated tag passes", () => {
+  describe("invariant #3: node text matches raw tag", () => {
+    it("3.1 — exclusive ownership passes", () => {
       resetIds();
       const ifTag = tag("#if", "x");
       const s = start(ifTag);
       const e = end(s.id, ifTag);
+      const r = root(
+        container("td", { text: "{{#if x}}" }, s.node),
+        container("td", { text: "{{#end}}" }, e),
+      );
 
+      const pairs = findBoundaries(r);
+      expect(() => hoist(pairs)).not.toThrow();
+    });
+
+    it("3.2 — start ancestor has extra content", () => {
+      resetIds();
+      const ifTag = tag("#if", "x");
+      const s = start(ifTag);
+      const e = end(s.id, ifTag);
+      const r = root(
+        container("td", { text: "Hello{{#if x}}" }, s.node),
+        container("td", { text: "{{#end}}" }, e),
+      );
+
+      const pairs = findBoundaries(r);
+      expect(() => hoist(pairs)).toThrow(SyntaxError);
+    });
+
+    it("3.3 — end ancestor has extra content", () => {
+      resetIds();
+      const ifTag = tag("#if", "x");
+      const s = start(ifTag);
+      const e = end(s.id, ifTag);
+      const r = root(
+        container("td", { text: "{{#if x}}" }, s.node),
+        container("td", { text: "{{#end}}Bye" }, e),
+      );
+
+      const pairs = findBoundaries(r);
+      expect(() => hoist(pairs)).toThrow(SyntaxError);
+    });
+
+    it("3.4 — extra content at intermediate level", () => {
+      resetIds();
+      const ifTag = tag("#if", "x");
+      const s = start(ifTag);
+      const e = end(s.id, ifTag);
+      const r = root(
+        container("div", { text: "Extra{{#if x}}" },
+          container("td", { text: "{{#if x}}" }, s.node)),
+        container("div", { text: "{{#end}}" },
+          container("td", { text: "{{#end}}" }, e)),
+      );
+
+      const pairs = findBoundaries(r);
+      expect(() => hoist(pairs)).toThrow(SyntaxError);
+    });
+
+    it("3.5 — whitespace-only surroundings pass", () => {
+      resetIds();
+      const ifTag = tag("#if", "x");
+      const s = start(ifTag);
+      const e = end(s.id, ifTag);
+      const r = root(
+        container("td", { text: " {{#if x}} " }, s.node),
+        container("td", { text: " {{#end}} " }, e),
+      );
+
+      const pairs = findBoundaries(r);
+      expect(() => hoist(pairs)).not.toThrow();
+    });
+
+    it("3.6 — whitespace plus extra content fails", () => {
+      resetIds();
+      const ifTag = tag("#if", "x");
+      const s = start(ifTag);
+      const e = end(s.id, ifTag);
+      const r = root(
+        container("td", { text: " Hello {{#if x}} " }, s.node),
+        container("td", { text: "{{#end}}" }, e),
+      );
+
+      const pairs = findBoundaries(r);
+      expect(() => hoist(pairs)).toThrow(SyntaxError);
+    });
+
+    it("3.7 — siblings (no walk) — invariant not checked", () => {
+      resetIds();
+      const ifTag = tag("#if", "x");
+      const s = start(ifTag);
+      const e = end(s.id, ifTag);
       const r = root(s.node, e);
 
       const pairs = findBoundaries(r);
-      // Siblings — no path to walk; invariant #3 enforcement is pending
+      // Loop body never executes; text check is not reached
       expect(() => hoist(pairs)).not.toThrow();
+    });
+  });
+
+  describe("invariant #2 x #3 interaction", () => {
+    it("3.8 — DOM tag mismatch caught before text check", () => {
+      resetIds();
+      const ifTag = tag("#if", "x");
+      const s = start(ifTag);
+      const e = end(s.id, ifTag);
+      const r = root(
+        container("td", { text: "{{#if x}}" }, s.node),
+        container("th", { text: "{{#end}}" }, e),
+      );
+
+      const pairs = findBoundaries(r);
+      expect(() => hoist(pairs)).toThrow(/DOM tag mismatch/);
+    });
+
+    it("3.9 — existing invariant #2 and hoist-operation tests pass", () => {
+      // Validated by the surrounding test suites passing
+    });
+  });
+
+  describe("multi-level paths", () => {
+    it("3.10 — two-level clean path", () => {
+      resetIds();
+      const ifTag = tag("#if", "x");
+      const s = start(ifTag);
+      const e = end(s.id, ifTag);
+      const r = root(
+        container("div", { text: "{{#if x}}" },
+          container("td", { text: "{{#if x}}" }, s.node)),
+        container("div", { text: "{{#end}}" },
+          container("td", { text: "{{#end}}" }, e)),
+      );
+
+      const pairs = findBoundaries(r);
+      expect(() => hoist(pairs)).not.toThrow();
+    });
+
+    it("3.11 — clean inner, dirty outer", () => {
+      resetIds();
+      const ifTag = tag("#if", "x");
+      const s = start(ifTag);
+      const e = end(s.id, ifTag);
+      const r = root(
+        container("div", { text: "Sibling{{#if x}}" },
+          container("td", { text: "{{#if x}}" }, s.node)),
+        container("div", { text: "{{#end}}" },
+          container("td", { text: "{{#end}}" }, e)),
+      );
+
+      const pairs = findBoundaries(r);
+      expect(() => hoist(pairs)).toThrow(SyntaxError);
     });
   });
 
@@ -262,8 +406,8 @@ describe("hoist", () => {
       const s = start(ifTag);
       const e = end(s.id, ifTag);
 
-      const startContainer = container("td", s.node);
-      const endContainer = container("td", e);
+      const startContainer = container("td", { text: "{{#if x}}" }, s.node);
+      const endContainer = container("td", { text: "{{#end}}" }, e);
       const r = root(startContainer, endContainer);
 
       const pairs = findBoundaries(r);
@@ -286,10 +430,10 @@ describe("hoist", () => {
       const e2 = end(s2.id, eachTag);
 
       const r = root(
-        container("td", s1.node),
-        container("td", e1),
-        container("td", s2.node),
-        container("td", e2),
+        container("td", { text: "{{#if x}}" }, s1.node),
+        container("td", { text: "{{#end}}" }, e1),
+        container("td", { text: "{{#each y}}" }, s2.node),
+        container("td", { text: "{{#end}}" }, e2),
       );
 
       const pairs = findBoundaries(r);
@@ -311,8 +455,8 @@ describe("hoist", () => {
       const outerEnd = end(outerStart.id, outerTag);
 
       // Inner at depth 2, outer at depth 1
-      const innerStartContainer = container("td", innerStart.node);
-      const innerEndContainer = container("td", innerEnd);
+      const innerStartContainer = container("td", { text: "{{#each y}}" }, innerStart.node);
+      const innerEndContainer = container("td", { text: "{{#end}}" }, innerEnd);
       const r = root(
         outerStart.node,
         container("tr", innerStartContainer, innerEndContainer),

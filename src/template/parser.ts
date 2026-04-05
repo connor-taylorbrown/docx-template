@@ -67,6 +67,7 @@ export interface Element {
   id: number;
   keyword: string | null;
   expression: Expression;
+  tags: string[];
   children: Element[];
 }
 
@@ -82,6 +83,7 @@ export interface TagResult {
 interface Scope {
   id: number;
   keyword: string;
+  raw: string;
   expression: Expression;
   children: Element[];
 }
@@ -124,18 +126,19 @@ export class Parser {
         id: scope.id,
         keyword: scope.keyword,
         expression: scope.expression,
+        tags: [scope.raw, tag.raw],
         children: scope.children,
       };
       this.current().push(element);
       return { id, element };
     } else if (tag.isKeyword) {
       const expression = parseExpression(tag.params ?? "");
-      this.stack.push({ id, keyword: tag.head, expression, children: [] });
+      this.stack.push({ id, keyword: tag.head, raw: tag.raw, expression, children: [] });
       return { id, element: null };
     } else {
       const text = tag.params ? `${tag.head} ${tag.params}` : tag.head;
       const expression = parseExpression(text);
-      const element: Element = { id, keyword: null, expression, children: [] };
+      const element: Element = { id, keyword: null, expression, tags: [tag.raw], children: [] };
       this.current().push(element);
       return { id, element };
     }
